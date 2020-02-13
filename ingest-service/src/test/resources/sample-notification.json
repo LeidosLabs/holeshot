@@ -1,0 +1,50 @@
+{
+  "Type" : "Notification",
+  "MessageId" : "e0ed5ff8-0e97-5188-8517-0eec7303bfc3",
+  "TopicArn" : "arn:aws:sns:us-east-1:049646209254:patagonia-image-ingest-leidos",
+  "Subject" : "Amazon S3 Notification",
+  "Message" : "{\"Records\":[{\"eventVersion\":\"2.0\",\"eventSource\":\"aws:s3\",\"awsRegion\":\"us-east-1\",\"eventTime\":\"2017-02-08T01:58:44.094Z\",\"eventName\":\"ObjectCreated:CompleteMultipartUpload\",\"userIdentity\":{\"principalId\":\"AWS:AIDAIE6XIJKKR474WUVAG\"},\"requestParameters\":{\"sourceIPAddress\":\"96.241.220.45\"},\"responseElements\":{\"x-amz-request-id\":\"36DA2F51F9AFD95F\",\"x-amz-id-2\":\"18evfa9vRzUFH1TekLgMrNV8abYQo5HoPin3XTwIvyApE9Ml+XH0hofvzwg/dlXi\"},\"s3\":{\"s3SchemaVersion\":\"1.0\",\"configurationId\":\"ObjectCreated to patagonia-image-ingest-leidos SNS\",\"bucket\":{\"name\":\"patagonia-image-files-leidos\",\"ownerIdentity\":{\"principalId\":\"AH8B5GM3OJIUV\"},\"arn\":\"arn:aws:s3:::patagonia-image-files-leidos\"},\"object\":{\"key\":\"po_235248_pan_0000000.ntf\",\"size\":387716333,\"eTag\":\"0e1f073e6f1ed34d2224711a6a0a8d6c-6\",\"sequencer\":\"00589A7B4583F87D5D\"}}}]}",
+  "Timestamp" : "2017-02-08T01:58:44.198Z",
+  "SignatureVersion" : "1",
+  "Signature" : "eJVWlkwf3SArNTS/Ni5uwQTr9gKzCgLW42ZNMM1vINezWu9GIV4UCAxN+4X6NfSweS+ms7Q+861nHtSC87d159Jehw5k0axAIyXHoFMCC2Ol8KWkQn7WdRioT9Q0M9M6J98g/k4Iyt9qekMLcxUd2+knWXOJwMzVez3mQv+Xpyk1DxtpbQWEQQbFVHuN8wTPqOpg+O3FDNwwY8yATB0QbhVg0KFfYFa3MJrDML3rveqA/JDXPtgBWP6LcooAubrO7YXIN4ZXNljciF7FgolEMkXZEE6XhmoX4pQY/yJ/qVE9/wB1Rm7OXZHTGSFSU9H6Rkyp9ofc2giIxTAyGj/uRw==",
+  "SigningCertURL" : "https://sns.us-east-1.amazonaws.com/SimpleNotificationService-b95095beb82e8f6a046b3aafc7f4149a.pem",
+  "UnsubscribeURL" : "https://sns.us-east-1.amazonaws.com/?Action=Unsubscribe&SubscriptionArn=arn:aws:sns:us-east-1:049646209254:patagonia-image-ingest-leidos:01ca34e0-a66a-4e48-aba7-a8f3ac10d8b9"
+}
+
+
+
+{
+  "Records":[{
+    "eventVersion":"2.0",
+    "eventSource":"aws:s3",
+    "awsRegion":"us-east-1",
+    "eventTime":"2017-02-08T01:58:44.094Z",
+    "eventName":"ObjectCreated:CompleteMultipartUpload",
+    "userIdentity":{
+      "principalId":"AWS:AIDAIE6XIJKKR474WUVAG"
+    },
+    "requestParameters":{
+      "sourceIPAddress":"96.241.220.45"
+    },
+    "responseElements":{
+      "x-amz-request-id":"36DA2F51F9AFD95F",
+      "x-amz-id-2":"18evfa9vRzUFH1TekLgMrNV8abYQo5HoPin3XTwIvyApE9Ml+XH0hofvzwg/dlXi"
+    },
+    "s3":{
+      "s3SchemaVersion":"1.0",
+      "configurationId":"ObjectCreated to patagonia-image-ingest-leidos SNS",
+      "bucket":{
+        "name":"patagonia-image-files-leidos",
+        "ownerIdentity":{"principalId":"AH8B5GM3OJIUV"},
+        "arn":"arn:aws:s3:::patagonia-image-files-leidos"
+      },
+      "object":{
+        "key":"po_235248_pan_0000000.ntf",
+        "size":387716333,
+        "eTag":"0e1f073e6f1ed34d2224711a6a0a8d6c-6",
+        "sequencer":"00589A7B4583F87D5D"
+      }
+    }
+  }]
+}"
+},

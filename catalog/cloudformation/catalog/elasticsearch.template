@@ -1,0 +1,72 @@
+{
+    "Parameters": {
+       "NameSuffix": {
+          "Description": "Suffix that will be appended to all stack components",
+          "Type": "String"
+        },
+        "SecurityGroups": {
+            "Type": "CommaDelimitedList"
+        },
+        "Subnet": {
+            "Type": "String"
+        },
+        "ElasticsearchVersion": {
+            "Type": "String"
+        },
+        "NodeVolumeSize": {
+            "Type": "String"
+        },
+        "MasterNodeCount": {
+            "Type": "String"
+        },
+        "MasterInstanceType": {
+            "Type": "String"
+        },
+        "DataNodeCount": {
+            "Type": "String"
+        },
+        "DataInstanceType": {
+            "Type": "String"
+        }
+    },
+    "Conditions" : {
+        "NoMasterNodes": {"Fn::Equals": [{"Ref": "MasterNodeCount"}, "0"]}
+    },
+    "Resources": {
+        "ImageCatalogES": {
+            "Type": "AWS::Elasticsearch::Domain",
+            "Properties": {
+                "DomainName": {"Fn::Sub": "image-catalog-${NameSuffix}"},
+                "EBSOptions": {
+                    "EBSEnabled": "true",
+                    "VolumeSize": { "Ref": "NodeVolumeSize" },
+                    "VolumeType": "gp2"
+                },
+                "ElasticsearchClusterConfig": {
+                    "DedicatedMasterEnabled": {"Fn::If": ["NoMasterNodes", false, true]},
+                    "DedicatedMasterCount": {"Fn::If": ["NoMasterNodes", { "Ref": "AWS::NoValue" }, {"Ref": "MasterNodeCount"}]},
+                    "DedicatedMasterType": {"Fn::If": ["NoMasterNodes", { "Ref": "AWS::NoValue" }, {"Ref": "MasterInstanceType"}]},
+                    "InstanceCount": { "Ref": "DataNodeCount" },
+                    "InstanceType": { "Ref": "DataInstanceType" },
+                    "ZoneAwarenessEnabled": false
+                },
+                "ElasticsearchVersion": { "Ref": "ElasticsearchVersion"},
+                "VPCOptions": {
+                    "SecurityGroupIds": { "Ref": "SecurityGroups" },
+                    "SubnetIds": [{ "Ref": "Subnet" }]
+                },
+                "AdvancedOptions": {
+                    "rest.action.multi.allow_explicit_index": true,
+                    "indices.fielddata.cache.size": 40,
+                    "indices.query.bool.max_clause_count": 1024
+                }
+            }
+        }
+    },
+    "Outputs": {
+        "Endpoint": {
+            "Description": "Endpoint for the created elasticsearch service",
+            "Value": { "Fn::GetAtt": [ "ImageCatalogES", "DomainEndpoint"] }
+        }
+    }
+}

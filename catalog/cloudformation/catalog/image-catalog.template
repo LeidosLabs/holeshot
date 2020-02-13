@@ -1,0 +1,103 @@
+{
+    "Parameters" : {
+        "NameSuffix": {
+            "Description": "Suffix that will be appended to all stack components",
+            "Type": "String"
+        },
+        "ImageMetadataSNSTopic" : {
+            "Description": "The SNS Topic to subscribe to image metadata from",
+            "Type" : "String"
+        },
+        "SecurityGroups": {
+            "Type": "String"
+        },
+        "Subnet": {
+            "Type": "String"
+        },
+        "TileserverURL" : {
+            "Description" : "The tileserver url for generating thumbnail links",
+            "Type" : "String"
+        },
+        "S3DeploymentBucket": {
+            "Description": "The bucket that contains deployment artifacts",
+            "Type": "String"
+        },
+        "S3BackupBucket": {
+            "Description": "The bucket to store metadata events in for backup",
+            "Type": "String"
+        },
+        "TemplateBaseURL": {
+            "Type": "String"
+        },
+        "ESVersion": {
+            "Type": "String"
+        },
+        "ESNodeVolumeSize" : {
+            "Type": "String"
+        },
+        "ESMasterNodeCount": {
+            "Type": "String"
+        },
+        "ESMasterInstanceType": {
+            "Type": "String"
+        },
+        "ESDataNodeCount": {
+            "Type": "String"
+        },
+        "ESDataInstanceType": {
+            "Type": "String"
+        },
+        "UserPoolARN": {
+            "Type": "String"
+        }
+    },
+    "Resources": {
+        "ElasticsearchStack" : {
+            "Type": "AWS::CloudFormation::Stack",
+            "Properties": {
+                "Parameters": {
+                   "NameSuffix": { "Ref": "NameSuffix" },
+                   "SecurityGroups": { "Ref": "SecurityGroups" },
+                   "Subnet": { "Ref": "Subnet" },
+                   "ElasticsearchVersion": { "Ref": "ESVersion" },
+                   "NodeVolumeSize": { "Ref": "ESNodeVolumeSize" },
+                   "MasterNodeCount": { "Ref": "ESMasterNodeCount" },
+                   "MasterInstanceType": { "Ref": "ESMasterInstanceType" },
+                   "DataNodeCount": { "Ref": "ESDataNodeCount" },
+                   "DataInstanceType": { "Ref": "ESDataInstanceType" }
+                },
+                "TemplateURL": { "Fn::Sub":"${TemplateBaseURL}/catalog/elasticsearch.template" }
+            }
+        },
+        "IngestLambda": {
+            "Type": "AWS::CloudFormation::Stack",
+            "DependsOn": ["ElasticsearchStack"],
+            "Properties": {
+                "Parameters": {
+                    "NameSuffix": { "Ref": "NameSuffix" },
+                    "SecurityGroups": { "Ref": "SecurityGroups" },
+                    "Subnet": { "Ref": "Subnet" },
+                    "ImageMetadataSNSTopic": { "Ref": "ImageMetadataSNSTopic" },
+                    "ElasticsearchEndpoint": { "Fn::GetAtt": ["ElasticsearchStack", "Outputs.Endpoint"]},
+                    "TileserverURL": { "Ref": "TileserverURL" },
+                    "S3DeploymentBucket": { "Ref": "S3DeploymentBucket"},
+                    "S3BackupBucket": { "Ref": "S3BackupBucket" }
+
+                },
+                "TemplateURL": { "Fn::Sub":"${TemplateBaseURL}/catalog/ingest-lambda.template" }
+            }
+        },
+        "APIGateway": {
+            "Type": "AWS::CloudFormation::Stack",
+            "DependsOn": ["ElasticsearchStack"],
+            "Properties": {
+                "Parameters": {
+                    "ElasticsearchEndpoint": { "Fn::GetAtt": ["ElasticsearchStack", "Outputs.Endpoint"]},
+                    "UserPoolARN": { "Ref": "UserPoolARN" }
+                },
+                "TemplateURL": { "Fn::Sub":"${TemplateBaseURL}/api/catalog-api.template" }
+            }
+        }
+
+    }
+}

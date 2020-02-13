@@ -1,0 +1,46 @@
+#! /bin/sh
+
+
+### BEGIN INIT INFO
+# chkconfig:         234 90 20
+# Provides:          runonce
+# Required-Start:    $remote_fs $syslog
+# Required-Stop:     $remote_fs $syslog
+# Description:       Jetty Tile Service
+### END INIT INFO
+
+
+PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+RUNONCE_D=/usr/local/etc/runonce.d
+
+do_start () {
+ mkdir -p $RUNONCE_D/ran > /dev/null 2>&1
+ mkdir -p /var/log/runonce > /dev/null 2>&1
+
+ find -L $RUNONCE_D -maxdepth 1 -executable -type f | sort -V |
+ while read file
+ do
+    filename="$(basename $file)"
+    newFile="$RUNONCE_D/ran/$filename"
+    mv "$file" "$newFile"
+    logger -t runonce -p local3.info "$file"
+    "$newFile" > /var/log/runonce/$filename.log 2>&1
+ done
+}
+
+case "$1" in
+ start|"")
+ do_start
+ ;;
+ restart|reload|force-reload)
+ echo "Error: argument '$1' not supported" >&2
+ exit 3
+ ;;
+ stop)
+ # Do nothing
+ ;;
+ *)
+ echo "Usage: runonce [start|stop]" >&2
+ exit 3
+ ;;
+esac

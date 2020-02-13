@@ -1,0 +1,9 @@
+#version 400 core
+
+#include HistogramSampling.vp
+
+void main() {
+    float colorValue = 1.0;
+    vec3 colorFactor = vec3(0.0, colorValue, 0.0);
+    sampleInputTexture(colorFactor);
+}

@@ -1,0 +1,14 @@
+version: 0.2
+
+phases:
+  install:
+    commands:
+      - 'mkdir -p ~/.m2'
+      - 'cp settings.xml ~/.m2/settings.xml'
+  build:
+    commands:
+      - 'echo Build started on $(date)'
+      - 'mvn clean install --non-recursive'    
+  post_build:
+    commands:
+      - 'mvn -Dmaven.test.skip=true -DskipTests deploy --non-recursive'

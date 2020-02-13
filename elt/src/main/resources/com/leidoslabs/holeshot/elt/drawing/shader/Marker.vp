@@ -1,0 +1,17 @@
+#version 400 core
+
+layout(location = 0) in vec2 vertexPosition;
+layout(location = 1) in vec3 inColor;
+layout(location = 2) in vec2 offset;
+
+uniform mat4 pMat;
+uniform mat4 mvMat;
+
+out vec4 vertexColor;
+
+void main() {
+    //Counter-rotate and scale the shape, then translate it to openGL coordinates, then project it to ortho image
+    gl_Position = pMat * (mvMat * vec4(vertexPosition.xy, 0.0, 1.0) + vec4(offset.xy, 0.0, 0.0));
+
+    vertexColor = vec4(inColor, 1.0f);
+}

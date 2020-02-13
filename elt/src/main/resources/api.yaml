@@ -1,0 +1,215 @@
+openapi: 3.0.0
+servers:
+  - description: localhost
+    url: http://localhost:8080/api/elt
+info:
+  description: Command and Control API for Tileserver ELT
+  version: "1.0.0"
+  title: ELT API
+  contact:
+    email: ray.roberts@leidos.com
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: developers
+    description: Operations available to regular developers
+paths:
+  /image/{appId}/{url}:
+    post:
+      tags:
+        - developers
+      summary: Load an image to the viewer
+      operationId: loadImage
+      description: |
+        Load an image to the viewer
+      parameters:
+        - in: path
+          name: appId
+          description: The appId to load the image to
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: url
+          description: The image url to load
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: newWindow
+          description: Should image be loaded into a new window
+          schema:
+            type: boolean
+        - in: query
+          name: resetViewport
+          description: Should the boundaries of the current viewport be reset
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Successfully loaded an image
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+  /boundingbox/{appId}/{url}:
+    get:
+      tags:
+        - developers
+      summary: Get bounding box for an image in the viewer
+      operationId: getBoundingBox
+      description: |
+        Retrieve the boundingBox of the current viewport
+      parameters:
+        - in: path
+          name: appId
+          description: The appId to load the image to
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: url
+          description: The image url to load
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully received bounding box of image
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+    put:
+      tags:
+        - developers
+      summary: Set the viewport of the given image app
+      operationId: setBoundingBox
+      description: |
+        Retrieve the boundingBox of the current viewport
+      parameters:
+        - in: path
+          name: appId
+          description: The appId to load the image to
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: url
+          description: The image url to load
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully went to bounding box of image in the viewer
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+                      
+  /apps:
+    get:
+      tags:
+        - developers
+      summary: Get a list of available ELT Frames
+      operationId: getApps
+      description: |
+        Retrieve the boundingBox of the current viewport
+      responses:
+        '200':
+          description: Sucessfully retrieved available app frames
+          content:
+            application/json:
+              schema:
+                type: string
+  /open/{appId}/{url}:
+    get:
+      tags:
+        - developers
+      summary: Load and set viewport to image in ELT
+      operationId: openImage
+      description: |
+        Load and set viewport of image in ELT
+      parameters:
+        - in: path
+          name: appId
+          description: The appId to load the image to
+          required: true
+          schema:
+            type: string
+        - in: path
+          name: url
+          description: The image url to load
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lat
+          description: Latitude of center
+          schema:
+            type: string
+        - in: query
+          name: lon
+          description: Longitude of center
+          schema:
+            type: string
+        - in: query
+          name: zoom
+          description: Zoom level
+          schema:
+            type: string
+        - in: query
+          name: newWindow
+          description: Should image be loaded into a new window
+          schema:
+            type: boolean
+        - in: query
+          name: resetViewport
+          description: Should the boundaries of the current viewport be reset
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Successfully loaded image and centered to specified coordinate
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string

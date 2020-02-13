@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<jaxb:bindings version="2.1"
+	xmlns:jaxb="http://java.sun.com/xml/ns/jaxb"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xmlns:xs="http://www.w3.org/2001/XMLSchema"
+    xmlns:xlink="http://www.w3.org/1999/xlink"
+	xsi:schemaLocation="http://java.sun.com/xml/ns/jaxb http://java.sun.com/xml/ns/jaxb/bindingschema_2_0.xsd">
+
+
+	<jaxb:bindings
+		schemaLocation="http://www.w3.org/1999/xlink.xsd">
+		<jaxb:bindings node="//xs:group[@name='locatorModel']//xs:element[@ref='xlink:title']">
+  		   <jaxb:property name="locatorModelTitle" />
+		</jaxb:bindings>
+		<jaxb:bindings node="//xs:group[@name='arcModel']//xs:element[@ref='xlink:title']">
+  		   <jaxb:property name="arcModelTitle" />
+		</jaxb:bindings>
+	</jaxb:bindings>
+	<jaxb:bindings
+		schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/geometryBasic0d1d.xsd">
+		<jaxb:bindings node="//xs:element[@name='_Curve']">
+  		   <jaxb:factoryMethod name="AbstractCurve" />
+		</jaxb:bindings>
+	</jaxb:bindings>
+	<jaxb:bindings
+		schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/geometryBasic2d.xsd">
+		<jaxb:bindings node="//xs:element[@name='_Surface']">
+  		   <jaxb:factoryMethod name="AbstractSurface" />
+		</jaxb:bindings>
+		<jaxb:bindings node="//xs:element[@name='_Ring']">
+  		   <jaxb:factoryMethod name="AbstractRing" />
+		</jaxb:bindings>
+	</jaxb:bindings>
+	<jaxb:bindings
+		schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/geometryPrimitives.xsd">
+		<jaxb:bindings node="//xs:element[@name='_Solid']">
+  		   <jaxb:factoryMethod name="AbstractSolid" />
+		</jaxb:bindings>
+	</jaxb:bindings>
+	<jaxb:bindings
+		schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/defaultStyle.xsd">
+		<jaxb:bindings node="//xs:element[@name='_Style']">
+  		   <jaxb:factoryMethod name="AbstractStyle" />
+		</jaxb:bindings>
+		<jaxb:bindings node="//xs:element[@name='featureStyle']">
+  		   <jaxb:factoryMethod name="FeatureStyleProperty" />
+		</jaxb:bindings>
+		<jaxb:bindings node="//xs:element[@name='geometryStyle']">
+  		   <jaxb:factoryMethod name="GeometryStyleProperty" />
+		</jaxb:bindings>
+		<jaxb:bindings node="//xs:element[@name='topologyStyle']">
+  		   <jaxb:factoryMethod name="TopologyStyleProperty" />
+		</jaxb:bindings>
+		<jaxb:bindings node="//xs:element[@name='labelStyle']">
+  		   <jaxb:factoryMethod name="LabelStyleProperty" />
+		</jaxb:bindings>
+		<jaxb:bindings node="//xs:element[@name='graphStyle']">
+  		   <jaxb:factoryMethod name="GraphStyleProperty" />
+		</jaxb:bindings>
+	</jaxb:bindings>
+	<jaxb:bindings
+		schemaLocation="http://schemas.opengis.net/gml/3.1.1/base/feature.xsd">
+		<jaxb:bindings node="//xs:element[@name='FeatureCollection']">
+  		   <jaxb:factoryMethod name="AbstractFeatureCollection" />
+		</jaxb:bindings>
+	</jaxb:bindings>
+</jaxb:bindings>

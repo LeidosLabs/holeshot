@@ -1,0 +1,50 @@
+{
+  "mappings": {
+    "metadata": {
+      "dynamic": true,
+      "properties": {      
+        "edhIdentifier": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword",
+              "ignore_above": 256
+            }
+          }
+        },
+        "name": {
+          "type": "text",
+          "fields": {
+            "keyword": {
+              "type": "keyword"
+            }
+          }
+        },
+        "date": {
+          "type":   "date",
+          "format": "date_time||epoch_millis"
+        },          
+        "bounds": {
+          "type": "geo_shape",
+          "tree": "quadtree",
+          "precision": "1.0m"
+        },
+        "imageLink": {
+          "type": "text",
+          "index": false
+        }
+      },
+      "dynamic_templates": [
+        {
+          "IID": {
+            "match": "IID*",
+            "match_mapping_type": "*",
+            "mapping": {
+              "type": "text"
+            }
+          }
+        }
+      ]
+    }
+  }
+}

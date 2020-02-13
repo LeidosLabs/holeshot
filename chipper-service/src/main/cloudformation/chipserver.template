@@ -1,0 +1,791 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Auto-Scaling Jetty Chipper Server",
+
+  "Parameters" : {
+    "DeploymentArtifactsBucketName": {
+      "Description": "Name of S3 bucket that will contain the deployable artifacts and configurations needed by this template.",
+      "Type": "String",
+      "Default": "advanced-analytics-deployment",
+      "ConstraintDescription": "must be the name of an existing S3 bucket containing the deployable CSCIs and configuration files"
+    },
+    "VpcId" : {
+      "Type" : "AWS::EC2::VPC::Id",
+      "Description" : "The ID of the VPC to use",
+      "Default" : "vpc-29d17050"
+    },
+
+    "PrivateSubnets" : {
+      "Type" : "List<AWS::EC2::Subnet::Id>",
+      "Description" : "The list of SubnetIds for the Tileserver, you should have at least 2 subnets in different availability zones",
+      "Default" : "subnet-02f3aef632fc76739,subnet-0fccd580fb4d3541c"
+    },
+
+    "KeyName" : {
+      "Description" : "The EC2 Key Pair to allow SSH access to the instances",
+      "Type" : "AWS::EC2::KeyPair::KeyName",
+      "Default" : "advanced-analytics-05-18-2017",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+    },
+
+    "InstanceType" : {
+      "Description" : "Chipper EC2 instance type",
+      "Type" : "String",
+      "Default" : "g3s.xlarge",
+      "AllowedValues" : [ "g3s.xlarge" ],
+      "ConstraintDescription" : "must be a valid EC2 GPU instance type"
+    },
+
+    "MaxChippers" : {
+      "Description" : "Max number of Chippers allowed in the Chipper AutoscaleGroup",
+      "Type" : "Number",
+      "Default" : "10"
+    },
+    "VPCCidr" : {
+      "Description" : "The IP address range for the VPC",
+      "Type": "String",
+      "MinLength": "9",
+      "MaxLength": "18",
+      "Default": "10.0.0.0/16",
+      "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
+      "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "ParentDNSName" : {
+      "Description" : "The Parent Domainname to attach this stack to",
+      "Default" : "leidoslabs.com",
+      "Type" : "String"
+    },
+    "PublicZoneID" : {
+      "Description" : "The Route53 Public Zone",
+      "Default" : "ZTV3G174437K",
+      "Type" : "String"
+    },
+    "PrivateZoneID" : {
+      "Description" : "The Route53 Private Zone",
+      "Default" : "Z0827693CMTT0OYSKLZX",
+      "Type" : "String"
+    },
+    "HostedZoneCertificateArn" : {
+      "Description" : "The ARN to the Parent Domain's Certificate",
+      "Default" : "arn:aws:acm:us-east-1:199974664221:certificate/430f2509-82b5-4bcb-bb35-d0fc384df07a",
+      "Type" : "String"
+    },
+    "ApiKeyID" : {
+      "Description" : "The ID of the key used to access the API",
+      "Default" : "wxqg4zueia",
+      "Type" : "String"
+    },
+    "CatalogURL" : {
+      "Description" : "The URL to the catalog api",
+      "Default" : "https://7picw7si6f.execute-api.us-east-1.amazonaws.com/imagecatalog",
+      "Type" : "String"
+    },
+    "TileserverClientSecurityGroupId" : {
+      "Description" : "The security group associated with tileserver clients",
+      "Type" : "AWS::EC2::SecurityGroup::Id",
+      "Default" : "sg-050799fda71e6f129",
+      "ConstraintDescription" : "Must be the ID of an existing security group."
+    }, 
+    "BastionSecurityGroup" : {
+      "Description" : "Security Group for all Bastions",
+      "Default" : "sg-0dd8ab1573c2eed76",
+      "Type" : "AWS::EC2::SecurityGroup::Id"
+    },
+    "PermissionsBoundary" : {
+      "Description" : "The DeveloperPolicy for creating IAM Roles",
+      "Default" : "arn:aws:iam::199974664221:policy/DeveloperPolicy",
+      "Type" : "String"
+    },
+    "StackSuffix" : {
+      "Description" : "The suffix that will be appended to all artifact names in the stack",
+      "Default" : 0,
+      "Type" : "Number",
+      "MinValue": 0,
+      "MaxValue": 99
+    },
+    "PrimaryStack" : {
+      "Description" : "The suffix that will be appended to all artifact names in the stack",
+      "Default" : "false",
+      "AllowedValues" : [ "true", "false" ],
+      "Type" : "String"
+    }
+    
+  },
+  "Conditions": {
+     "IsPrimaryStack": {"Fn::Equals": ["true", {"Ref": "PrimaryStack"}]}
+  },
+
+  "Mappings" : {
+    "AWSInstanceType2Arch" : {
+      "g3s.xlarge"  : { "Arch" : "HVM64"  }
+    },
+
+    "AWSInstanceType2NATArch" : {
+      "g3s.xlarge"  : { "Arch" : "NATHVM64"  }
+    },
+
+    "AWSInstanceType2NetworkCapacity" : {
+      "g3s.xlarge"  : { "OneMinuteCapacity": "34260000000", "FiveMinuteCapacity": "171300000000" }
+    },
+
+    "AWSRegionArch2AMI" : {
+      "us-east-1"        : {"HVM64" : "ami-0de53d8956e8dcf80"}
+    }
+  },
+
+  "Resources" : {
+    "ChipperELB" : {
+       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+       "Properties": {
+          "Name" : { "Fn::Sub": "ChipserverELB-${StackSuffix}" },
+          "Scheme" : "internal",
+          "Type": "network",
+          "Subnets" : { "Ref" :"PrivateSubnets" }
+       }
+     },
+
+    "ChipperELBTargetGroup": {
+       "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+       "Properties" : {
+          "HealthCheckIntervalSeconds": "30",
+          "HealthCheckProtocol": "TCP",
+          "HealthCheckTimeoutSeconds": "10",
+          "HealthCheckPort": "traffic-port",
+          "HealthyThresholdCount": "3",
+          "Name" : { "Fn::Sub": "ChipserverTargetGroup-${StackSuffix}" },
+          "Port": "80",
+          "Protocol": "TCP",
+          "TargetGroupAttributes": [{
+             "Key": "deregistration_delay.timeout_seconds",
+             "Value": "20"
+          }],
+          "UnhealthyThresholdCount": "3",
+          "VpcId": { "Ref": "VpcId" }
+       }
+    },
+
+     "ChipperELBListener": {
+        "Type": "AWS::ElasticLoadBalancingV2::Listener",
+        "Properties": {
+           "DefaultActions": [{
+              "Type": "forward",
+              "TargetGroupArn": { "Ref": "ChipperELBTargetGroup" }
+           }],
+           "LoadBalancerArn": { "Ref": "ChipperELB" },
+           "Port": "80",
+           "Protocol": "TCP"
+        }
+    },
+
+    "ChipperRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName" : { "Fn::Sub": "AADev-ChipserverRole-${StackSuffix}" },
+        
+        "AssumeRolePolicyDocument": {
+          "Version" : "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Principal": {
+              "Service": [ "ec2.amazonaws.com" ]
+            },
+            "Action": [ "sts:AssumeRole" ]
+          } ]
+        },
+        "Path": "/",
+        "ManagedPolicyArns": [
+             "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+             "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+             "arn:aws:iam::aws:policy/AmazonSSMDirectoryServiceAccess",
+             "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        ],
+         "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
+      }
+    },
+
+    "ChipperRolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName" : { "Fn::Sub": "AADev-ChipserverPolicy-${StackSuffix}" },
+        "PolicyDocument": {
+          "Version" : "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Action": "*",
+            "Resource": "*"
+          } ]
+        },
+        "Roles": [ { "Ref": "ChipperRole" } ]
+      }
+    },
+
+    "ChipperInstanceProfile" : {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName" : { "Fn::Sub": "ChipserverInstanceProfile-${StackSuffix}" },
+        "Path": "/",
+        "Roles": [ { "Ref": "ChipperRole" } ]
+      }
+    },
+
+    "ChipperCacheSubnetGroup" : {
+        "Type": "AWS::ElastiCache::SubnetGroup",
+        "Properties" : {
+           "CacheSubnetGroupName" : { "Fn::Sub": "ChipserverCacheGroup-${StackSuffix}" },
+           "Description": "Subnets for ElastiCache",
+           "SubnetIds": { "Ref" :"PrivateSubnets" }
+        }
+    },
+
+    "ChipperSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupName" : { "Fn::Sub": "ChipserverSecurityGroup-${StackSuffix}" },
+        "VpcId": { "Ref": "VpcId" },
+        "GroupDescription" : "Enable SSH access from a restricted set of IPs from anywhere",
+        "SecurityGroupIngress" : [
+           {
+             "IpProtocol" : "tcp",
+             "FromPort" : "22",
+             "ToPort" : "22",
+             "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup"}
+           },
+           {
+             "IpProtocol" : "tcp",
+             "FromPort" : "80",
+             "ToPort" : "80",
+             "CidrIp" : { "Ref" : "VPCCidr"}
+           }
+         ]
+      }
+    },
+
+    "ChipperLaunchConfig" : {
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata" : {
+        "Comment" : "Install a simple application",
+        "AWS::CloudFormation::Authentication": {
+          "S3AccessByRole": {
+            "type": "S3",
+            "buckets": [{ "Fn::Select" : [ "0", { "Fn::Split": ["/", { "Ref": "DeploymentArtifactsBucketName"}]}] }],
+            "roleName": { "Ref" : "ChipperRole" }
+          }
+        },
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "packages" : {
+              "yum" : {
+                "java-1.8.0-openjdk": [],
+                "apache-commons-daemon-jsvc": [],
+                "perl-Switch": [],
+                "perl-DateTime": [],
+                "perl-Sys-Syslog": [],
+                "perl-LWP-Protocol-https": [],
+                "jq": []
+              }
+            },
+
+            "files" : {
+              "/usr/share/jetty/bin/chipserver.jar" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "chipserver.jar" ]]},
+                "mode"   : "000700",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/usr/share/jetty/bin/log4j.properties" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "log4j.properties" ]]},
+                "mode"   : "000600",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/downloadOffline.sh" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "downloadOffline.sh" ]]},
+                "mode"   : "000700",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/etc/init.d/jetty" : {
+                "source": { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "jetty.tpl" ]]},
+                "mode"   : "000700",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole",
+                "context":  {
+                  "CatalogURL": { "Ref": "CatalogURL" },
+                  "DomainName" : { "Ref": "ParentDNSName" }
+                }
+              },
+              "/usr/share/cloudwatch/CloudWatchMonitoringScripts.zip" : {
+                "source": "http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.1.zip",
+                "mode"   : "000600",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/usr/share/jetty/bin/installNvidiaGrid.sh" : {
+                "source": { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "installNvidiaGrid.sh" ]]},
+                "mode"   : "000700",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/usr/share/jetty/bin/installJAI.sh" : {
+                "source": { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "installJAI.sh" ]]},
+                "mode"   : "000700",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/etc/sysctl.d/99-jetty.conf" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "99-jetty.conf" ]]},
+                "mode"   : "000444",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/etc/security/limits.d/jetty.conf" : {
+                "content": { "Fn::Join" : ["", [
+                   "*               hard nofile     40000\n",
+                   "*               soft nofile     40000\n",
+                   "root            hard nofile     40000\n",
+                   "root            soft nofile     40000\n"
+                ]]},
+                "mode"   : "000444",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/usr/share/jetty/bin/signalServer" : {
+                "content": { "Fn::Join" : ["", [
+                      "#!/bin/bash\n",
+                      " /opt/aws/bin/cfn-signal -s true",
+                      " --stack ", { "Ref" : "AWS::StackName" },
+                      " --resource ChipperASG",
+                      " --region ", { "Ref" : "AWS::Region" },"\n" ] ] },
+                "mode"   : "000755",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/etc/init.d/runonce" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "runonce" ]]},
+                "mode"   : "000755",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/root/.leidos-sdk/credentials" : {
+                "content": { "Fn::Join" : ["", [
+                      "leidos_sdk_secret_access_key={{resolve:ssm:/Tileserver/TileserverPassword:1}}\n",
+                      "leidos_sdk_catalog_key={{resolve:ssm:/Catalog/CatalogKey:1}}\n" ] ] },
+                "mode"   : "000600",
+                "owner"  : "root",
+                "group"  : "root"
+              }
+            },
+            "commands" : {
+              "01-yumupdate" : {
+                "command" : "yum update -y"
+              },
+              "02-mkdir-jetty-logging" : {
+                "command" : "/bin/mkdir -p /var/log/jetty"
+              },
+              "03-chmod-jetty-logging" : {
+                "command" : "/bin/chmod 700 /var/log/jetty"
+              },
+              "04-runonce-sysconfig" : {
+                "command" : "chkconfig --add runonce"
+              },
+              "05-jetty-sysconfig" : {
+                "command" : "chkconfig --add jetty"
+              },
+              "06-mkdir-runonce": {
+                "command" : "mkdir -p /usr/local/etc/runonce.d"
+              },
+              "07-installJAI" : {
+                "command" :  "/usr/share/jetty/bin/installJAI.sh"
+              },
+              "08-installNvidiaGridAfterReboot" : {
+                "command" :  "ln -s /usr/share/jetty/bin/installNvidiaGrid.sh /usr/local/etc/runonce.d/01installNvidiaGrid.sh"
+              },
+              "09-signal-after-reboot" : {
+                "command" :  "ln -s /usr/share/jetty/bin/signalServer /usr/local/etc/runonce.d/02signalServer"
+              },
+              "10-reboot-after-nvidia" : {
+                "command" :  "ln -s /usr/sbin/reboot /usr/local/etc/runonce.d/03reboot"
+              },
+              "11-reboot" : {
+                "command" : "/sbin/shutdown -r now"
+              }
+            },
+            "services" : {
+              "sysvinit" : {
+                "jetty" : { "enabled": "true", "ensureRunning": "true" }
+              }
+            }
+          }
+        }
+      },
+      "Properties" : {
+        "KeyName" : { "Ref" : "KeyName" },
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+        "SecurityGroups" : [ { "Ref" : "ChipperSecurityGroup" }, { "Ref" : "TileserverClientSecurityGroupId" } ],
+        "IamInstanceProfile": { "Ref": "ChipperInstanceProfile" },
+        "InstanceType" : { "Ref" : "InstanceType" },
+        "InstanceMonitoring" : "true",
+        "BlockDeviceMappings" : [
+           {
+              "DeviceName": "/dev/xvda",
+              "Ebs": {
+                 "VolumeType": "gp2",
+                 "Iops": "300",
+                 "DeleteOnTermination": "true",
+                 "VolumeSize": "300"
+              }
+          }
+        ],
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+
+             "/opt/aws/bin/cfn-init -v ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --role ", { "Ref" : "ChipperRole" },
+             "         --resource ChipperLaunchConfig ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n",
+             "# cfn-signal will be sent after reboot, allowing updates to limits.d to take effect\n"
+        ]]}}
+      }
+    },
+    "ChipperASG" : {
+      "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "Properties" : {
+        "VPCZoneIdentifier" : { "Ref": "PrivateSubnets" },
+        "LaunchConfigurationName" : { "Ref" : "ChipperLaunchConfig" },
+        "MinSize" : "1",
+        "DesiredCapacity" : { "Ref": "MaxChippers" },
+        "MaxSize" : { "Ref": "MaxChippers" },
+        "TargetGroupARNs" : [ { "Ref" : "ChipperELBTargetGroup" } ],
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value" : { "Fn::Sub": "chipserver-${StackSuffix}" },
+          "PropagateAtLaunch": "true"
+        }]
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT5M",
+          "Count"   : "1"
+        }
+      }
+    },
+    "API": {
+        "Type": "AWS::ApiGateway::RestApi",
+        "Properties": {
+           "Name" : { "Fn::Sub": "ChipperApi-${StackSuffix}" },
+           "Description": "Chipper Api using VPC_LINK and AWS_IAM authorization",
+           "ApiKeySourceType" : "AUTHORIZER",
+           "EndpointConfiguration" : {
+             "Types" : [ "REGIONAL" ]
+           }
+        }
+    },
+    "APIResource": {
+        "Type": "AWS::ApiGateway::Resource",
+        "Properties": {
+           "RestApiId": {"Ref": "API" },
+           "ParentId": { "Fn::GetAtt" : [ "API", "RootResourceId" ] },
+           "PathPart": "{proxy+}"
+        }
+    },
+    "VPCLink": {
+       "Type": "AWS::ApiGateway::VpcLink",
+       "Properties": {
+          "Description": "Vpc link to GIS platform",
+          "Name" : { "Fn::Sub": "ChipperVPCLink-${StackSuffix}" },
+          "TargetArns": [ { "Ref": "ChipperELB" } ]
+       }
+    },
+    "APIMethod": {
+       "Type": "AWS::ApiGateway::Method",
+       "Properties": {
+          "ApiKeyRequired" : "true",
+          "AuthorizationType" : "CUSTOM",
+          "AuthorizerId" : {"Ref": "RestApiAuthorizer"},
+          "HttpMethod" : "ANY",
+          "ResourceId" : { "Ref": "APIResource"},
+          "RestApiId" : { "Ref": "API"},
+          "RequestParameters" : {
+             "method.request.path.proxy": "true"
+          },
+          "Integration" : {
+             "Type" : "HTTP_PROXY",
+             "CacheKeyParameters" : [ "method.request.path.proxy" ],
+             "IntegrationHttpMethod" : "ANY",
+             "PassthroughBehavior" : "WHEN_NO_MATCH",
+             "ConnectionType" : "VPC_LINK",
+             "ConnectionId" : "${stageVariables.vpcLinkId}",
+             "Uri" : { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ChipperELB", "DNSName" ] }, "/{proxy}" ]]},
+             "RequestParameters" : {
+               "integration.request.path.proxy": "method.request.path.proxy"
+             },
+             "IntegrationResponses" : [ {
+               "StatusCode" : "200"
+             } ]
+          }
+       },
+       "DependsOn": [ "VPCLink" ]
+    },
+    "APIStage": {
+       "Type": "AWS::ApiGateway::Stage",
+       "Properties": {
+          "StageName" : { "Fn::Sub": "ChipperProd-${StackSuffix}" },
+          "Description": "Prod Stage",
+          "RestApiId": { "Ref": "API" },
+          "DeploymentId": { "Ref": "APIDeployment" },
+          "MethodSettings": [
+             {
+                "ResourcePath": "/*",
+                "HttpMethod": "GET",
+                "MetricsEnabled": "true",
+                "DataTraceEnabled": "true",
+                "LoggingLevel": "ERROR"
+             },
+             {
+                "ResourcePath": "/*",
+                "HttpMethod": "POST",
+                "MetricsEnabled": "true",
+                "DataTraceEnabled": "true",
+                "LoggingLevel": "ERROR"
+             }
+          ],
+          "Variables": {
+             "vpcLinkId": { "Ref": "VPCLink" }
+          }
+       }
+    },
+    "APIDeployment": {
+       "Type": "AWS::ApiGateway::Deployment",
+       "Properties": {
+          "RestApiId": { "Ref": "API" },
+          "Description": "Chipper Deployment"
+       },
+       "DependsOn" : [
+          "APIMethod"
+       ]
+    },
+    "ApiDomainName" : {
+       "Type" : "AWS::ApiGateway::DomainName",
+       "Properties" : {
+          "DomainName" : { "Fn::Sub": "chipper${StackSuffix}.${ParentDNSName}" },
+          "RegionalCertificateArn" : { "Ref": "HostedZoneCertificateArn" },
+          "EndpointConfiguration" : { "Types" : [ "REGIONAL"] }
+       }
+    },
+    "PrimaryApiDomainName" : {
+       "Type" : "AWS::ApiGateway::DomainName",
+       "Condition": "IsPrimaryStack",
+       "Properties" : {
+          "DomainName" : { "Fn::Sub": "chipper.${ParentDNSName}" },
+          "RegionalCertificateArn" : { "Ref": "HostedZoneCertificateArn" },
+          "EndpointConfiguration" : { "Types" : [ "REGIONAL"] }
+       }
+    },
+    "DomainMapping": {
+       "Type": "AWS::ApiGateway::BasePathMapping",
+       "Properties": {
+          "DomainName" : {"Ref": "ApiDomainName"},
+          "RestApiId" : {"Ref": "API" },
+          "BasePath" : "",
+          "Stage" : {"Ref": "APIStage"}
+       }
+    },
+    "PrimaryDomainMapping": {
+       "Type": "AWS::ApiGateway::BasePathMapping",
+       "Condition": "IsPrimaryStack",
+       "Properties": {
+          "DomainName" : {"Ref": "PrimaryApiDomainName"},
+          "RestApiId" : {"Ref": "API" },
+          "BasePath" : "",
+          "Stage" : {"Ref": "APIStage"}
+       }
+    },
+
+    "ApiUsagePlan" : {
+        "Type": "AWS::ApiGateway::UsagePlan",
+        "Properties": {
+            "ApiStages": [
+                {
+                    "ApiId": { "Ref": "API" },
+                    "Stage": { "Ref": "APIStage" }
+                }
+            ],
+            "Description": "Chipper Usage Plan",
+            "UsagePlanName":  { "Fn::Sub": "ChipperPlan-${StackSuffix}" }
+       }
+    },
+    "ApiUsagePlanKey": {
+       "Type": "AWS::ApiGateway::UsagePlanKey",
+       "Properties": {
+          "KeyId": { "Ref": "ApiKeyID" },
+          "KeyType": "API_KEY",
+          "UsagePlanId": { "Ref": "ApiUsagePlan" }
+        }
+    },
+    "AuthLambdaRole": {
+       "Type": "AWS::IAM::Role",
+       "Properties": {
+         "RoleName":  { "Fn::Sub": "AADev-ChipperAuthRole-${StackSuffix}" },
+          "AssumeRolePolicyDocument": {
+             "Version": "2012-10-17",
+             "Statement": [{
+                "Effect": "Allow",
+                "Principal": {
+                   "Service": ["lambda.amazonaws.com"]
+                },
+                "Action": ["sts:AssumeRole"]
+             }]
+          },
+          "ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"],
+          "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
+       }
+    },
+    "AuthLambda": {
+       "Type": "AWS::Lambda::Function",
+       "Properties": {
+          "Code": {
+             "ZipFile": {"Fn::Join" : ["\n", [
+                "exports.handler = function(event, context, callback) {",
+                "    callback(null, {",
+                "        principalId: \"x-api-key\",",
+                "        usageIdentifierKey: event.queryStringParameters[\"x-api-key\"],",
+                "        policyDocument: {",
+                "            Version: \"2012-10-17\",",
+                "            Statement: [{",
+                "                Action: \"execute-api:Invoke\",",
+                "                Effect: \"Allow\",",
+                "                Resource: \"*\"",
+                "            }]",
+                "        }",
+                "    });",
+                "};"
+             ]]}
+          },
+          "Handler": "index.handler",
+          "MemorySize": 128,
+          "Role": {"Fn::GetAtt": ["AuthLambdaRole", "Arn"]},
+          "Runtime": "nodejs8.10",
+          "Timeout": 60
+       }
+    },
+    "RestApiAuthorizerRole": {
+       "Type": "AWS::IAM::Role",
+       "Properties": {
+          "RoleName":  { "Fn::Sub": "AADev-ChipperRESTAuthRole-${StackSuffix}" },
+          "AssumeRolePolicyDocument": {
+             "Version": "2012-10-17",
+             "Statement": [{
+                "Effect": "Allow",
+                "Principal": {
+                   "Service": ["apigateway.amazonaws.com"]
+                },
+               "Action": ["sts:AssumeRole"]
+             }]
+          },
+          "Policies": [{
+             "PolicyName": "chipperLambda",
+             "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                   "Effect": "Allow",
+                   "Action": "lambda:invokeFunction",
+                   "Resource": {"Fn::GetAtt": ["AuthLambda", "Arn"]}
+                }]
+             }
+          }],
+         "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
+       }
+    },
+    "RestApiAuthorizer": {
+       "Type": "AWS::ApiGateway::Authorizer",
+       "Properties": {
+          "AuthType" : "custom",
+          "AuthorizerCredentials": {"Fn::GetAtt": ["RestApiAuthorizerRole", "Arn"]},
+          "AuthorizerResultTtlInSeconds": 300,
+          "AuthorizerUri": {"Fn::Join" : ["", ["arn:aws:apigateway:", {"Ref": "AWS::Region"}, ":lambda:path/2015-03-31/functions/", {"Fn::GetAtt": ["AuthLambda", "Arn"]}, "/invocations"]]},
+          "Name":  { "Fn::Sub": "chipper-authorizer-${StackSuffix}" },
+          
+          "RestApiId": {"Ref": "API"},
+          "IdentitySource": "method.request.querystring.x-api-key",
+          "IdentityValidationExpression": "^[a-zA-Z0-9]{3,32}$",
+          "Type": "REQUEST"
+       },
+       "DependsOn" : [ "AuthLambda"]
+
+    },
+    "PublicDNSRecord" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "Properties" : {
+         "HostedZoneId" : { "Ref": "PublicZoneID" },
+         "Comment" : "DNS name for my instance.",
+         "Name" : { "Fn::Sub": "chipper${StackSuffix}.${ParentDNSName}." },
+         "AliasTarget": {
+            "HostedZoneId" : { "Fn::GetAtt" : [ "ApiDomainName", "RegionalHostedZoneId" ] },
+            "DNSName" : { "Fn::GetAtt" : [ "ApiDomainName", "RegionalDomainName" ] },
+            "EvaluateTargetHealth" : "false"
+         },
+         "Type" : "A"
+      }
+    },    
+    "PrivateDNSRecord" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "Properties" : {
+         "HostedZoneId" : { "Ref": "PrivateZoneID" },
+         "Comment" : "DNS name for my instance.",
+         "Name" : { "Fn::Sub": "chipper${StackSuffix}.${ParentDNSName}." },
+         "AliasTarget": {
+            "HostedZoneId" : { "Fn::GetAtt" : [ "ChipperELB", "CanonicalHostedZoneID" ] },
+            "DNSName" : { "Fn::GetAtt" : [ "ChipperELB", "DNSName" ] }
+         },
+         "Type" : "A"
+      }
+    },
+    "PrimaryPublicDNSRecord" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "Condition": "IsPrimaryStack",
+      "Properties" : {
+         "HostedZoneId" : { "Ref": "PublicZoneID" },
+         "Comment" : "DNS name for my instance.",
+         "Name" : { "Fn::Sub": "chipper.${ParentDNSName}." },
+         "AliasTarget": {
+            "HostedZoneId" : { "Fn::GetAtt" : [ "PrimaryApiDomainName", "RegionalHostedZoneId" ] },
+            "DNSName" : { "Fn::GetAtt" : [ "PrimaryApiDomainName", "RegionalDomainName" ] },
+            "EvaluateTargetHealth" : "false"
+         },
+         "Type" : "A"
+      }
+    },    
+    "PrimaryPrivateDNSRecord" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "Condition": "IsPrimaryStack",
+      "Properties" : {
+         "HostedZoneId" : { "Ref": "PrivateZoneID" },
+         "Comment" : "DNS name for my instance.",
+         "Name" : { "Fn::Sub": "chipper.${ParentDNSName}." },
+         "AliasTarget": {
+            "HostedZoneId" : { "Fn::GetAtt" : [ "ChipperELB", "CanonicalHostedZoneID" ] },
+            "DNSName" : { "Fn::GetAtt" : [ "ChipperELB", "DNSName" ] }
+         },
+         "Type" : "A"
+      }
+    }
+    
+  },
+
+  "Outputs" : {
+    "URL" : {
+      "Description" : "The URL of the website",
+      "Value" :  { "Fn::Join" : [ "", [ "https://", { "Ref": "ApiDomainName" } ]]}
+    }
+  }
+}

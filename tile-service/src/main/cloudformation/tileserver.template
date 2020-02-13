@@ -1,0 +1,1148 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Auto-Scaling Tile Server",
+
+  "Parameters" : {
+    "DeploymentArtifactsBucketName": {
+      "Description": "Name of S3 bucket that will contain the deployable artifacts and configurations needed by this template.",
+      "Type": "String",
+      "Default": "advanced-analytics-deployment",
+      "ConstraintDescription": "must be the name of an existing S3 bucket containing the deployable CSCIs and configuration files"
+    },
+    "TileBucketName": {
+      "Description": "Name of S3 bucket that will contain the output image tiles.",
+      "Type": "String",
+      "Default": "advanced-analytics-geo-tile-images",
+      "ConstraintDescription": "must be the name of an existing S3 bucket that will receive the output tiles"
+    },
+
+    "VpcId" : {
+      "Type" : "AWS::EC2::VPC::Id",
+      "Description" : "The ID of the VPC to use",
+      "Default" : "vpc-29d17050"
+    },
+
+    "PublicSubnets" : {
+      "Type" : "List<AWS::EC2::Subnet::Id>",
+      "Description" : "The list of SubnetIds for the Tileserver, you should have at least 2 subnets in different availability zones",
+      "Default" : "subnet-a2ed80ff,subnet-0221f9aa712129080"
+    },
+    "PrivateSubnets" : {
+      "Type" : "List<AWS::EC2::Subnet::Id>",
+      "Description" : "The list of SubnetIds for the Tileserver, you should have at least 2 subnets in different availability zones",
+      "Default" : "subnet-02f3aef632fc76739,subnet-0fccd580fb4d3541c"
+    },
+
+    "KeyName" : {
+      "Description" : "The EC2 Key Pair to allow SSH access to the instances",
+      "Type" : "AWS::EC2::KeyPair::KeyName",
+      "Default" : "advanced-analytics-05-18-2017",
+      "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
+    },
+
+    "InstanceType" : {
+      "Description" : "Tileserver EC2 instance type",
+      "Type" : "String",
+      "Default" : "c5.large",
+      "AllowedValues" : [ "c5.18xlarge","c5.9xlarge","c5.2xlarge","c5.xlarge","c5.large","c5.4xlarge","m3.2xlarge","m3.xlarge","m3.large","m3.medium","m4.16xlarge","m4.10xlarge","m4.2xlarge","m4.xlarge","m4.large","m4.4xlarge","m5.12xlarge","m5.24xlarge","m5.2xlarge","m5.xlarge","m5.large","m5.4xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type that supports ephemeral SSD storage."
+    },
+
+    "MaxTileservers" : {
+      "Description" : "Max number of Tileservers allowed in the Tileserver AutoscaleGroup",
+      "Type" : "Number",
+      "Default" : "10"
+    },
+    "BastionSecurityGroup" : {
+      "Description" : "The Security Group associated with the Bastion Services",
+      "Type" : "AWS::EC2::SecurityGroup::Id",
+      "Default" : "sg-0dd8ab1573c2eed76",
+      "ConstraintDescription" : "Must be the ID of an existing security group."
+    }, 
+    "TileserverClientSecurityGroupId" : {
+      "Description" : "The security group associated with the ELB",
+      "Type" : "AWS::EC2::SecurityGroup::Id",
+      "Default" : "sg-050799fda71e6f129",
+      "ConstraintDescription" : "Must be the ID of an existing security group."
+    }, 
+    "ParentDNSName" : {
+      "Description" : "The Parent Domainname to attach this stack to",
+      "Default" : "leidoslabs.com",
+      "Type" : "String"
+    },
+    "PublicZoneID" : {
+      "Description" : "The Route53 Public Zone",
+      "Default" : "ZTV3G174437K",
+      "Type" : "AWS::Route53::HostedZone::Id"
+    },
+    "PrivateZoneID" : {
+      "Description" : "The Route53 Private Zone",
+      "Default" : "Z0827693CMTT0OYSKLZX",
+      "Type" : "AWS::Route53::HostedZone::Id"
+    },
+    "HostedZoneCertificateArn" : {
+      "Description" : "The ARN to the Parent Domain's Certificate",
+      "Default" : "arn:aws:acm:us-east-1:199974664221:certificate/430f2509-82b5-4bcb-bb35-d0fc384df07a",
+      "Type" : "String"
+    },
+    "ApiKeyID" : {
+      "Description" : "The ID of the key used to access the API",
+      "Default" : "wxqg4zueia",
+      "Type" : "String"
+    },
+    "PermissionsBoundary" : {
+      "Description" : "The DeveloperPolicy for creating IAM Roles",
+      "Default" : "arn:aws:iam::199974664221:policy/DeveloperPolicy",
+      "Type" : "String"
+    },
+    "StackSuffix" : {
+      "Description" : "The suffix that will be appended to all artifact names in the stack",
+      "Default" : 0,
+      "Type" : "Number",
+      "MinValue": 0,
+      "MaxValue": 99
+    },
+    "PrimaryStack" : {
+      "Description" : "The suffix that will be appended to all artifact names in the stack",
+      "Default" : "false",
+      "AllowedValues" : [ "true", "false" ],
+      "Type" : "String"
+    }
+  },
+  "Conditions": {
+     "IsPrimaryStack": {"Fn::Equals": ["true", {"Ref": "PrimaryStack"}]}
+  },
+
+  "Mappings" : {
+    "AWSInstanceType2Arch" : {
+      "c5.large"     : { "Arch" : "HVM64"  }
+    },
+
+    "AWSInstanceType2NATArch" : {
+      "c5.large"     : { "Arch" : "NATHVM64"  }
+    },
+
+    "AWSInstanceType2NetworkCapacity" : {
+      "c5.large"     : { "OneMinuteCapacity": "34260000000",  "FiveMinuteCapacity": "171300000000" }
+    },
+    
+    "AWSRegionArch2AMI" : {
+      "us-east-1"        : {"HVM64" : "ami-0b69ea66ff7391e80"}
+    }
+  },
+
+  "Resources" : {
+     "LambdaExecutionRole": {
+       "Type": "AWS::IAM::Role",
+       "Properties": {
+         "RoleName" : { "Fn::Sub": "AADev-TilesvrLambdaRole-${StackSuffix}" },
+         "AssumeRolePolicyDocument": {
+           "Version" : "2012-10-17",
+           "Statement": [ {
+             "Effect": "Allow",
+             "Principal": {
+               "Service": [ "lambda.amazonaws.com" ]
+             },
+             "Action": [ "sts:AssumeRole" ]
+           } ]
+         },
+         "Path": "/",
+         "ManagedPolicyArns": [
+            "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+         ],
+         "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
+       }
+     },
+     "Multiply": {
+       "Type": "AWS::Lambda::Function",
+       "Properties": {
+         "Code": {
+           "ZipFile": {
+             "Fn::Join": ["\n", [
+               "var response = require('cfn-response');",
+               "exports.handler = function(event, context) {",
+               "var result =  Math.trunc(parseFloat(event.ResourceProperties.Op1) * parseFloat(event.ResourceProperties.Op2));",
+               "response.send(event, context, response.SUCCESS, {Value: result});",
+               "};"
+             ]]
+           }
+         },
+         "Handler": "index.handler",
+         "Runtime": "nodejs8.10",
+         "Timeout": "30",
+         "Role": {
+           "Fn::GetAtt": [
+             "LambdaExecutionRole", "Arn"
+           ]
+         }
+       }
+     },
+       
+     "CustomResource" : {
+        "Type": "AWS::CloudFormation::Stack",
+        "Properties": {
+           "TemplateURL": { "Fn::Sub": "http://s3.amazonaws.com/${DeploymentArtifactsBucketName}/customresource.template.json" }
+        }
+     },
+     "CustomResourcePolicy" : {
+        "Type": "AWS::IAM::Policy",
+        "Properties": {
+           "PolicyName": { "Fn::Sub": "AADev-TilesvrSES-${StackSuffix}" },
+           "Roles": [ { "Fn::GetAtt": [ "CustomResource", "Outputs.Role" ] } ],
+           "PolicyDocument": {
+              "Version": "2012-10-17",
+              "Statement": [ 
+                 {
+                    "Effect": "Allow",
+                    "Resource": "*",
+                    "Action": [
+                       "ses:VerifyDomainIdentity"
+                    ]
+                 }
+              ]
+           }
+        }
+     },
+
+    "TileserverELB" : {
+       "Type": "AWS::ElasticLoadBalancingV2::LoadBalancer",
+       "Properties": {
+          "Name": { "Fn::Sub": "TileserverELB-${StackSuffix}" },
+          "Scheme" : "internal",
+          "IpAddressType" : "ipv4",
+          "Type": "network",
+          "Subnets" : { "Ref" :"PrivateSubnets" }
+       }
+     },    
+
+    "TileserverELBTargetGroup": {
+       "Type" : "AWS::ElasticLoadBalancingV2::TargetGroup",
+       "Properties" : {
+          "HealthCheckIntervalSeconds": "30",
+          "HealthCheckProtocol": "TCP",
+          "HealthCheckTimeoutSeconds": "10",
+          "HealthCheckPort": "traffic-port",
+          "HealthyThresholdCount": "3",
+          "Name": { "Fn::Sub": "TileserverTargetGroup-${StackSuffix}" },
+          "Port": "80",
+          "Protocol": "TCP",
+          "TargetGroupAttributes": [{
+             "Key": "deregistration_delay.timeout_seconds",
+             "Value": "20"
+          }],
+          "UnhealthyThresholdCount": "3",
+          "VpcId": { "Ref": "VpcId" }
+       }
+    },
+
+     "TileserverELBListener": {
+        "Type": "AWS::ElasticLoadBalancingV2::Listener",
+        "Properties": {
+           "DefaultActions": [{
+              "Type": "forward",
+              "TargetGroupArn": { "Ref": "TileserverELBTargetGroup" }
+           }],
+           "LoadBalancerArn": { "Ref": "TileserverELB" },
+           "Port": "80",
+           "Protocol": "TCP"
+        }
+    },     
+            
+    
+    "TileserverRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": { "Fn::Sub": "AADev-TileserverRole-${StackSuffix}" },
+        "AssumeRolePolicyDocument": {
+           "Version" : "2012-10-17",
+           "Statement": [ {
+              "Effect": "Allow",
+              "Principal": {
+                 "Service": [ "ec2.amazonaws.com" ]
+              },
+              "Action": [ "sts:AssumeRole" ]
+           } ]
+        },
+        "Path": "/",
+        "ManagedPolicyArns": [
+             "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+             "arn:aws:iam::aws:policy/AmazonKinesisFullAccess",
+             "arn:aws:iam::aws:policy/AmazonKinesisFirehoseFullAccess",
+             "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+             "arn:aws:iam::aws:policy/AmazonSSMDirectoryServiceAccess",
+             "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        ],
+        "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
+      }
+    },
+
+    "TileserverRolePolicies": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": { "Fn::Sub": "AADev-TileserverPolicy-${StackSuffix}" },
+        "PolicyDocument": {
+          "Version" : "2012-10-17",
+          "Statement": [ {
+            "Effect": "Allow",
+            "Action": "*",
+            "Resource": "*"
+          } ]
+        },
+        "Roles": [ { "Ref": "TileserverRole" } ]
+      }
+    },
+
+    "TileserverInstanceProfile" : {
+      "Type": "AWS::IAM::InstanceProfile",
+      "Properties": {
+        "InstanceProfileName": { "Fn::Sub": "AADev-TileserverProfile-${StackSuffix}" },
+        "Path": "/",
+        "Roles": [ { "Ref": "TileserverRole" } ]
+      }
+    },
+    
+    "ElasticacheSecurityGroup": {
+       "Type": "AWS::EC2::SecurityGroup",
+       "Properties": {
+          "GroupName": { "Fn::Sub": "TileserverCacheGroup-${StackSuffix}" },
+          "VpcId": { "Ref": "VpcId" },
+          "GroupDescription": "Elasticache Security Group",
+          "SecurityGroupIngress": [ {
+             "IpProtocol": "tcp",
+             "FromPort": "0",
+             "ToPort": "65535",
+             "SourceSecurityGroupId": { "Fn::GetAtt" : [ "TileserverSecurityGroup", "GroupId" ] }
+          } ]
+       }
+    },
+    
+    "TileserverCacheSubnetGroup" : {
+        "Type": "AWS::ElastiCache::SubnetGroup",
+        "Properties" : {
+           "CacheSubnetGroupName": { "Fn::Sub": "TileserverSubnetGroup-${StackSuffix}" },
+           "Description": "Subnets for ElastiCache",
+           "SubnetIds": { "Ref" :"PrivateSubnets" } 
+        }
+    },
+    
+    "TileserverCacheCluster" : {
+        "Type": "AWS::ElastiCache::CacheCluster",
+        "Properties" : {
+           "ClusterName": { "Fn::Sub": "TilserverCacheCluster-${StackSuffix}" },
+           "AutoMinorVersionUpgrade": "true",
+           "Engine": "redis",
+           "EngineVersion": "3.2.6", 
+           "CacheNodeType": "cache.m4.large",
+           "NumCacheNodes": "1",
+           "VpcSecurityGroupIds": [{ "Fn::GetAtt" : [ "ElasticacheSecurityGroup", "GroupId" ] }],
+           "CacheSubnetGroupName" : { "Ref": "TileserverCacheSubnetGroup" }
+        }
+    },    
+
+    "TileserverSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupName": { "Fn::Sub": "TileserverSecurityGroup-${StackSuffix}" },
+        "VpcId": { "Ref": "VpcId" },
+        "GroupDescription" : "Enable SSH access from a restricted set of IPs and HTTPS port 443 from anywhere",
+        "SecurityGroupIngress" : [ 
+           {
+             "IpProtocol" : "tcp",
+             "FromPort" : "22",
+             "ToPort" : "22",
+             "SourceSecurityGroupId" : { "Ref" : "BastionSecurityGroup"}
+           }, 
+           {
+             "IpProtocol" : "tcp",
+             "FromPort" : "80",
+             "ToPort" : "80",
+             "SourceSecurityGroupId": { "Ref": "TileserverClientSecurityGroupId" }
+           },
+           {
+             "IpProtocol" : "tcp",
+             "FromPort" : "80",
+             "ToPort" : "80",
+             "CidrIp": "10.0.0.0/16"
+           }
+         ]
+      }
+    },
+    
+    "TileserverLaunchConfig" : {
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata" : {
+        "Comment" : "Install a simple application",
+        "AWS::CloudFormation::Authentication": {
+          "S3AccessByRole": {
+            "type": "S3",
+            "buckets": [{ "Fn::Select" : [ "0", { "Fn::Split": ["/", { "Ref": "DeploymentArtifactsBucketName"}]}] }],
+            "roleName": { "Ref" : "TileserverRole" }
+          }
+        },
+        "AWS::CloudFormation::Init" : {
+          "config" : {
+            "packages" : {
+              "yum" : {
+                "wget": [],
+                "java-1.8.0-openjdk": [],
+                "apache-commons-daemon-jsvc": [],
+                "perl-Switch": [],
+                "perl-DateTime": [],
+                "perl-Sys-Syslog": [],
+                "perl-LWP-Protocol-https": [],
+                "perl-Digest-SHA.x86_64": [],
+                "jq": []
+              }
+            },
+
+            "files" : {
+              "/usr/share/jetty/bin/tileserver.jar" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "tileserver.jar" ]]},
+                "mode"   : "000700",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/usr/share/jetty/bin/log4j.properties" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "log4j.properties" ]]},
+                "mode"   : "000600",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/etc/init.d/jetty" : {
+                "source": { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "jetty.tpl" ]]},
+                "mode"   : "000700",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole",
+                "context":  {
+                  "TileBucketName": { "Ref": "TileBucketName"},
+                  "TileBucketRegion": { "Ref" : "AWS::Region" }
+                }
+              },     
+              "/etc/cfn/cfn-hup.conf" : {
+                "content" : {
+                  "Fn::Join" : ["", [
+                    "[main]\n",
+                    "stack=", { "Ref" : "AWS::StackId" }, "\n",
+                    "region=", { "Ref" : "AWS::Region" }, "\n"
+                ]]},
+                "mode"    : "000400",
+                "owner"   : "root",
+                "group"   : "root"
+              },
+              "/etc/cron.d/get_cluster_config" : {
+                "content" : "*/5 * * * * root /usr/local/bin/get_cluster_config",
+                "mode"    : "000644",
+                "owner"   : "root",
+                "group"   : "root"
+              },                
+              "/usr/local/bin/get_cluster_config" : {
+                "content" : { "Fn::Join" : ["", [
+                  "#! /bin/bash\n",
+                  "aws elasticache describe-cache-clusters ",
+                  "         --cache-cluster-id ", {"Ref" : "TileserverCacheCluster"},
+                  "         --show-cache-node-info --region ", { "Ref" : "AWS::Region" }, " > /tmp/cacheclusterconfig\n"
+                ]]},
+                "mode"    : "000755",
+                "owner"   : "root",
+                "group"   : "root"
+              },              
+
+              "/etc/cfn/hooks.d/cfn-auto-reloader.conf" : {
+                "content": { "Fn::Join" : ["", [
+                  "[cfn-auto-reloader-hook]\n",
+                  "triggers=post.update\n",
+                  "path=Resources.TileserverLaunchConfig.Metadata.AWS::CloudFormation::Init\n",
+                  "action=/opt/aws/bin/cfn-init -v ",
+                  "         --stack ", { "Ref" : "AWS::StackName" },
+                  "         --resource TileserverLaunchConfig ",
+                  "         --region ", { "Ref" : "AWS::Region" }, "\n",
+                  "runas=root\n"
+                ]]}
+              },
+              "/usr/share/cloudwatch/CloudWatchMonitoringScripts.zip" : {
+                "source": "http://aws-cloudwatch.s3.amazonaws.com/downloads/CloudWatchMonitoringScripts-1.2.2.zip",
+                "mode"   : "000600",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/usr/share/cloudwatch/crontab" : {
+                "content": { "Fn::Join" : ["", [
+                  "*/5 * * * * /usr/share/cloudwatch/aws-scripts-mon/mon-put-instance-data.pl --mem-used-incl-cache-buff --auto-scaling --mem-util --from-cron\n"
+                ]]},
+                "mode"   : "000600",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/etc/sysctl.d/99-jetty.conf" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "99-jetty.conf" ]]},
+                "mode"   : "000444",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/etc/security/limits.d/jetty.conf" : {
+                "content": { "Fn::Join" : ["", [
+                   "*               hard nofile     40000\n",
+                   "*               soft nofile     40000\n",
+                   "root            hard nofile     40000\n",
+                   "root            soft nofile     40000\n"
+                ]]},
+                "mode"   : "000444",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/usr/share/jetty/bin/signalServer" : {
+                "content": { "Fn::Join" : ["", [ 
+                      "#!/bin/bash\n",
+                      " /opt/aws/bin/cfn-signal -s true",
+                      " --stack ", { "Ref" : "AWS::StackName" },
+                      " --resource TileserverASG ",
+                      " --region ", { "Ref" : "AWS::Region" },"\n" ] ] },
+                "mode"   : "000755",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/etc/init.d/runonce" : {
+                "source" : { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "runonce" ]]},
+                "mode"   : "000755",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/etc/aws-kinesis/agent.json" : {
+                "source": { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "agent.json" ]]},
+                "mode"   : "000755",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/home/ec2-user/runKinesis": {
+                "content" : { "Fn::Join" : ["", [
+                  "#! /bin/bash\n",
+                  "yum -y install https://s3.amazonaws.com/streaming-data-agent/aws-kinesis-agent-latest.amzn1.noarch.rpm\n",
+                  "mkdir -m 755 /var/log/tileserver\n",
+                  "touch /var/log/tileserver/request.log\n",
+                  "chmod 644 /var/log/tileserver/request.log\n",
+                  "chkconfig aws-kinesis-agent on\n"
+                ]]},
+                "mode"   : "000755",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/home/ec2-user/clearRequestLog" : {
+                "content" : { "Fn::Join" : ["", [
+                  "#! /bin/bash\n",
+                  "> /var/log/tileserver/request.log\n"
+                ]]},
+                "mode"   : "000755",
+                "owner"  : "root",
+                "group"  : "root"
+              },
+              "/etc/cron.d/empty_request_log" : {
+                "content" : "0 4 * * * root /home/ec2-user/clearRequestLog\n",
+                "mode"    : "000644",
+                "owner"   : "root",
+                "group"   : "root"
+              },
+              "/root/.leidos-sdk/credentials" : {
+                 "content": { "Fn::Join" : ["", [
+                    "leidos_sdk_secret_access_key={{resolve:ssm:/Tileserver/TileserverPassword:1}}\n",
+                    "leidos_sdk_catalog_key={{resolve:ssm:/Catalog/CatalogKey:1}}\n" ] ] },
+                 "mode"   : "000600",
+                 "owner"  : "root",
+                 "group"  : "root"
+              }
+            },
+            "commands" : {
+              "01-yumupdate" : {
+                "command" : "yum update -y"
+              },
+              "02-mkdir-jetty-logging" : {
+                "command" : "/bin/mkdir -p /var/log/jetty"
+              },
+              "03-chmod-jetty-logging" : {
+                "command" : "/bin/chmod 700 /var/log/jetty"
+              },
+              "04-runonce-sysconfig" : {
+                "command" : "chkconfig --add runonce"
+              },
+              "05-jetty-sysconfig" : {
+                "command" : "chkconfig --add jetty"
+              },
+              "06-mkdir-runonce": {
+                "command" : "mkdir -p /usr/local/etc/runonce.d"
+              },
+              "07-get-cluster-config" : {
+                "command" : "/usr/local/bin/get_cluster_config"
+              },              
+              "08-cloudwatch-monitoring-unzip" : {
+                "command" : "/usr/bin/unzip CloudWatchMonitoringScripts.zip",
+                "cwd" : "/usr/share/cloudwatch"
+              },              
+              "09-cloudwatch-monitoring-crontab" : {
+                "command" : "/usr/bin/crontab /usr/share/cloudwatch/crontab"
+              },
+              "10-signal-after-reboot" : {
+                "command" :  "ln -s /usr/share/jetty/bin/signalServer /usr/local/etc/runonce.d/01signalServer"
+              },
+              "11-kinesis" : {
+                "command" : "/home/ec2-user/runKinesis"
+              },
+              "12-reboot" : {
+                "command" : "/sbin/shutdown -r now"
+              }
+            },
+            "services" : {
+              "sysvinit" : {
+                "jetty" : { "enabled": "true", "ensureRunning": "true" },
+                "cfn-hup" : { "enabled" : "true", "ensureRunning" : "true",
+                              "files" : ["/etc/cfn/cfn-hup.conf", "/etc/cfn/hooks.d/cfn-auto-reloader.conf"]}
+              }
+            }
+          }
+        }
+      },
+      "Properties" : {
+        "AssociatePublicIpAddress": "false" ,
+        "KeyName" : { "Ref" : "KeyName" },
+        "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
+                                          { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
+        "SecurityGroups" : [ { "Ref" : "TileserverSecurityGroup" } ],
+        "IamInstanceProfile": { "Ref": "TileserverInstanceProfile" },
+        "InstanceType" : { "Ref" : "InstanceType" },
+        "InstanceMonitoring" : "true",
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+             "#!/bin/bash -xe\n",
+             "yum update -y aws-cfn-bootstrap\n",
+             
+             "/opt/aws/bin/cfn-init -v ",
+             "         --stack ", { "Ref" : "AWS::StackName" },
+             "         --role ", { "Ref" : "TileserverRole" },
+             "         --resource TileserverLaunchConfig ",
+             "         --region ", { "Ref" : "AWS::Region" }, "\n",
+             "# cfn-signal will be sent after reboot, allowing updates to limits.d to take effect\n"
+        ]]}}
+      }
+    },
+    "TileserverASG" : {
+      "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "Properties" : {
+        "VPCZoneIdentifier" : { "Ref": "PrivateSubnets" },
+        "LaunchConfigurationName" : { "Ref" : "TileserverLaunchConfig" },
+        "MinSize" : "1",
+        "MaxSize" : { "Ref": "MaxTileservers" },
+        "TargetGroupARNs" : [ { "Ref" : "TileserverELBTargetGroup" } ],
+        "Tags" : [ {
+          "Key" : "Name",
+          "Value": { "Fn::Sub": "tileserver-${StackSuffix}" },
+          "PropagateAtLaunch": "true"
+        }],
+        "MetricsCollection" : [
+           { "Granularity": "1Minute",
+             "Metrics": [
+                "GroupMinSize",
+                "GroupMaxSize",
+                "GroupTotalInstances"
+             ]
+          } 
+        ]
+      },
+      "CreationPolicy" : {
+        "ResourceSignal" : {
+          "Timeout" : "PT5M",
+          "Count"   : "1"
+        }
+      }
+    },
+    "TileserverScaleUpPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "TileserverASG" },
+        "Cooldown" : "300",
+        "ScalingAdjustment" : "1"
+      }
+    },
+    "TileserverScaleDownPolicy" : {
+      "Type" : "AWS::AutoScaling::ScalingPolicy",
+      "Properties" : {
+        "AdjustmentType" : "ChangeInCapacity",
+        "AutoScalingGroupName" : { "Ref" : "TileserverASG" },
+        "Cooldown" : "600",
+        "ScalingAdjustment" : "-1"
+      }
+    },
+
+     "NetworkScaleUpAlarmThreshold": {
+       "Type": "Custom::LambdaCallout",
+       "Properties": {
+         "ServiceToken": {
+           "Fn::GetAtt": [
+             "Multiply",
+             "Arn"
+           ]
+         },
+         "Op1": { "Fn::FindInMap" : [ "AWSInstanceType2NetworkCapacity", { "Ref" : "InstanceType" }, "OneMinuteCapacity" ] },
+         "Op2": ".60"
+       }
+     },
+     "NetworkScaleDownAlarmThreshold": {
+       "Type": "Custom::LambdaCallout",
+       "Properties": {
+         "ServiceToken": {
+           "Fn::GetAtt": [
+             "Multiply",
+             "Arn"
+           ]
+         },
+         "Op1": { "Fn::FindInMap" : [ "AWSInstanceType2NetworkCapacity", { "Ref" : "InstanceType" }, "OneMinuteCapacity" ] },
+         "Op2": ".20"
+       }
+     },
+
+    "NetworkAlarmHigh": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-up if NetworkOut > Threshold for 5 minutes",
+        "MetricName": "NetworkOut",
+        "Unit": "Bytes",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "60",
+        "EvaluationPeriods": "3",
+        "Threshold": { "Fn::GetAtt" : [ "NetworkScaleUpAlarmThreshold", "Value" ] },
+        "AlarmActions": [ { "Ref": "TileserverScaleUpPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": { "Ref": "TileserverASG" }
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    "NetworkAlarmLow": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-down if NetworkOut < Threshold  for 6 minutes",
+        "MetricName": "NetworkOut",
+        "Unit": "Bytes",
+        "Namespace": "AWS/EC2",
+        "Statistic": "Average",
+        "Period": "60",
+        "EvaluationPeriods": "15",
+        "Threshold": { "Fn::GetAtt" : [ "NetworkScaleDownAlarmThreshold", "Value" ] },
+        "AlarmActions": [ { "Ref": "TileserverScaleDownPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "AutoScalingGroupName",
+            "Value": { "Ref": "TileserverASG" }
+          }
+        ],
+        "ComparisonOperator": "LessThanThreshold"
+      }
+    },
+    "TargetResponseTimeHigh": {
+     "Type": "AWS::CloudWatch::Alarm",
+     "Properties": {
+        "AlarmDescription": "Scale-up if TargetResonseTime > 0.5 for 2 minutes",
+        "MetricName": "TargetResponseTime",
+        "Namespace": "AWS/ApplicationELB",
+        "Statistic": "Average",
+        "Period": "60",
+        "EvaluationPeriods": "2",
+        "Threshold": "0.5",
+        "AlarmActions": [ { "Ref": "TileserverScaleUpPolicy" } ],
+        "Dimensions": [
+          {
+            "Name": "LoadBalancer",
+            "Value":  { "Fn::GetAtt": [ "TileserverELB", "LoadBalancerFullName" ] } 
+          },
+          {
+            "Name": "TargetGroup",
+            "Value":  { "Fn::GetAtt": [ "TileserverELBTargetGroup", "TargetGroupFullName" ] } 
+          }
+        ],
+        "ComparisonOperator": "GreaterThanThreshold"
+      }
+    },
+    
+    "API": {
+        "Type": "AWS::ApiGateway::RestApi",
+        "Properties": {
+           "Name": { "Fn::Sub": "TileserverApi-${StackSuffix}" },
+           "Description": "Tileserver Api using VPC_LINK and AWS_IAM authorization",
+           "ApiKeySourceType" : "AUTHORIZER",
+           "EndpointConfiguration" : {
+             "Types" : [ "REGIONAL" ]
+           }
+        }
+    },
+    "APIResource": {
+        "Type": "AWS::ApiGateway::Resource",
+        "Properties": {
+           "RestApiId": {"Ref": "API" },
+           "ParentId": { "Fn::GetAtt" : [ "API", "RootResourceId" ] },
+           "PathPart": "{proxy+}"
+        }
+    },
+    "VPCLink": {
+       "Type": "AWS::ApiGateway::VpcLink",
+       "Properties": {
+          "Description": "Vpc link to GIS platform",
+          "Name": { "Fn::Sub": "TilesvrVPCLink-${StackSuffix}" },
+          "TargetArns": [ { "Ref": "TileserverELB" } ]
+       }
+    },
+    "APIMethod": {
+       "Type": "AWS::ApiGateway::Method",
+       "Properties": {
+          "ApiKeyRequired" : "true",
+          "AuthorizationType" : "CUSTOM",
+          "AuthorizerId" : {"Ref": "RestApiAuthorizer"},
+          "HttpMethod" : "ANY",
+          "ResourceId" : { "Ref": "APIResource"},
+          "RestApiId" : { "Ref": "API"},
+          "RequestParameters" : {
+             "method.request.path.proxy": "true"
+          },
+          "Integration" : {
+             "Type" : "HTTP_PROXY",
+             "CacheKeyParameters" : [ "method.request.path.proxy" ],
+             "IntegrationHttpMethod" : "ANY",
+             "PassthroughBehavior" : "WHEN_NO_MATCH",
+             "ConnectionType" : "VPC_LINK",
+             "ConnectionId" : "${stageVariables.vpcLinkId}",
+             "Uri" : { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "TileserverELB", "DNSName" ] }, "/{proxy}" ]]},
+             "RequestParameters" : {
+               "integration.request.path.proxy": "method.request.path.proxy"
+             },
+             "IntegrationResponses" : [ {
+               "StatusCode" : "200"
+             } ]
+          }
+       },
+       "DependsOn": [ "VPCLink" ]
+    },
+    "APIStage": {
+       "Type": "AWS::ApiGateway::Stage",
+       "Properties": {
+          "StageName" : { "Fn::Sub": "TilesvrProd-${StackSuffix}" },
+          "Description": "Prod Stage",
+          "RestApiId": { "Ref": "API" },
+          "DeploymentId": { "Ref": "APIDeployment" },
+          "MethodSettings": [
+             {
+                "ResourcePath": "/*",
+                "HttpMethod": "GET",
+                "MetricsEnabled": "true",
+                "DataTraceEnabled": "true",
+                "LoggingLevel": "ERROR"
+             },
+             {
+                "ResourcePath": "/*",
+                "HttpMethod": "POST",
+                "MetricsEnabled": "true",
+                "DataTraceEnabled": "true",
+                "LoggingLevel": "ERROR"
+             }
+          ],
+          "Variables": {
+             "vpcLinkId": { "Ref": "VPCLink" }
+          }
+       }
+    },
+    "APIDeployment": {
+       "Type": "AWS::ApiGateway::Deployment",
+       "Properties": {
+          "RestApiId": { "Ref": "API" },
+          "Description": "Tileserver Deployment"
+       },
+       "DependsOn" : [
+          "APIMethod"
+       ]
+    },
+    "ApiDomainName" : {
+       "Type" : "AWS::ApiGateway::DomainName",
+       "Properties" : {
+          "DomainName" : { "Fn::Sub": "tileserver${StackSuffix}.${ParentDNSName}" },
+          "RegionalCertificateArn" : { "Ref": "HostedZoneCertificateArn" },
+          "EndpointConfiguration" : { "Types" : [ "REGIONAL"] }
+       }
+    },
+    "PrimaryApiDomainName" : {
+       "Type" : "AWS::ApiGateway::DomainName",
+       "Condition": "IsPrimaryStack",
+       "Properties" : {
+          "DomainName" : { "Fn::Sub": "tileserver.${ParentDNSName}" },
+          "RegionalCertificateArn" : { "Ref": "HostedZoneCertificateArn" },
+          "EndpointConfiguration" : { "Types" : [ "REGIONAL"] }
+       }
+    },
+    "DomainMapping": {
+       "Type": "AWS::ApiGateway::BasePathMapping",
+       "Properties": {
+          "DomainName" : {"Ref": "ApiDomainName"},
+          "RestApiId" : {"Ref": "API" },
+          "BasePath" : "",
+          "Stage" : {"Ref": "APIStage"}
+       }
+    },
+    "PrimaryDomainMapping": {
+       "Type": "AWS::ApiGateway::BasePathMapping",
+       "Condition": "IsPrimaryStack",
+       "Properties": {
+          "DomainName" : {"Ref": "PrimaryApiDomainName"},
+          "RestApiId" : {"Ref": "API" },
+          "BasePath" : "",
+          "Stage" : {"Ref": "APIStage"}
+       }
+    },
+    
+    "ApiUsagePlan" : {
+        "Type": "AWS::ApiGateway::UsagePlan",
+        "Properties": {
+            "ApiStages": [
+                {
+                    "ApiId": { "Ref": "API" },
+                    "Stage": { "Ref": "APIStage" }
+                }
+            ],
+            "Description": "Tileserver Usage Plan",
+            "UsagePlanName" : { "Fn::Sub": "TileserverPlan-${StackSuffix}" }
+       }
+    },
+    "ApiUsagePlanKey": {
+       "Type": "AWS::ApiGateway::UsagePlanKey",
+       "Properties": {
+          "KeyId": { "Ref": "ApiKeyID" },
+          "KeyType": "API_KEY",
+          "UsagePlanId": { "Ref": "ApiUsagePlan" }
+        }
+    },
+    "AuthLambdaRole": {
+       "Type": "AWS::IAM::Role",
+       "Properties": {
+          "RoleName" : { "Fn::Sub": "AADev-AuthLambdaRole-${StackSuffix}" },
+          
+          "AssumeRolePolicyDocument": {
+             "Version": "2012-10-17",
+             "Statement": [{
+                "Effect": "Allow",
+                "Principal": {
+                   "Service": ["lambda.amazonaws.com"]
+                },
+                "Action": ["sts:AssumeRole"]
+             }]
+          },
+          "ManagedPolicyArns": ["arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"],
+          "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
+       }
+    },
+    "AuthLambda": {
+       "Type": "AWS::Lambda::Function",
+       "Properties": {
+          "Code": {
+             "ZipFile": {"Fn::Join" : ["\n", [
+                "exports.handler = function(event, context, callback) {",
+                "    callback(null, {",
+                "        principalId: 'x-api-key',",
+                "        usageIdentifierKey: event.headers['x-api-key'],",
+                "        policyDocument: {",
+                "            Version: '2012-10-17',",
+                "            Statement: [{",
+                "                Action: 'execute-api:Invoke',",
+                "                Effect: 'Allow',",
+                "                Resource: '*'",
+                "            }]",
+                "        }",
+                "    });",
+                "};"
+             ]]}
+          },
+          "Handler": "index.handler",
+          "MemorySize": 128,
+          "Role": {"Fn::GetAtt": ["AuthLambdaRole", "Arn"]},
+          "Runtime": "nodejs8.10",
+          "Timeout": 60
+       }
+    },
+    "RestApiAuthorizerRole": {
+       "Type": "AWS::IAM::Role",
+       "Properties": {
+          "RoleName" : { "Fn::Sub": "AADev-RestApiAuthorizer-${StackSuffix}" },
+          
+          "AssumeRolePolicyDocument": {
+             "Version": "2012-10-17",
+             "Statement": [{
+                "Effect": "Allow",
+                "Principal": {
+                   "Service": ["apigateway.amazonaws.com"]
+                },
+               "Action": ["sts:AssumeRole"]
+             }]
+          },
+          "Policies": [{
+             "PolicyName": "lambda",
+             "PolicyDocument": {
+                "Version": "2012-10-17",
+                "Statement": [{
+                   "Effect": "Allow",
+                   "Action": "lambda:invokeFunction",
+                   "Resource": {"Fn::GetAtt": ["AuthLambda", "Arn"]}
+                }]
+             }
+          }],
+          "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
+       }
+    },
+    "RestApiAuthorizer": {
+       "Type": "AWS::ApiGateway::Authorizer",
+       "Properties": {
+          "AuthType" : "custom",
+          "AuthorizerCredentials": {"Fn::GetAtt": ["RestApiAuthorizerRole", "Arn"]},
+          "AuthorizerResultTtlInSeconds": 300,
+          "AuthorizerUri": {"Fn::Join" : ["", ["arn:aws:apigateway:", {"Ref": "AWS::Region"}, ":lambda:path/2015-03-31/functions/", {"Fn::GetAtt": ["AuthLambda", "Arn"]}, "/invocations"]]},
+          "Name" : { "Fn::Sub": "tileserver-authorizer-${StackSuffix}" },
+          "RestApiId": {"Ref": "API"},
+          "IdentitySource": "method.request.header.x-api-key",
+          "Type": "REQUEST"
+       },
+       "DependsOn" : [ "AuthLambda"]
+
+    },
+    "PublicDNSRecord" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "Properties" : {
+         "HostedZoneId" : { "Ref": "PublicZoneID" },
+         "Comment" : "DNS name for my instance.",
+         "Name" : { "Fn::Sub": "tileserver${StackSuffix}.${ParentDNSName}." },
+         "AliasTarget": {
+            "HostedZoneId" : { "Fn::GetAtt" : [ "ApiDomainName", "RegionalHostedZoneId" ] },
+            "DNSName" : { "Fn::GetAtt" : [ "ApiDomainName", "RegionalDomainName" ] },
+            "EvaluateTargetHealth" : "false"
+         },
+         "Type" : "A"
+      }
+    },    
+    "PrivateDNSRecord" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "Properties" : {
+         "HostedZoneId" : { "Ref": "PrivateZoneID" },
+         "Comment" : "DNS name for my instance.",
+         "Name" : { "Fn::Sub": "tileserver${StackSuffix}.${ParentDNSName}." },
+         "AliasTarget": {
+            "HostedZoneId" : { "Fn::GetAtt" : [ "TileserverELB", "CanonicalHostedZoneID" ] },
+            "DNSName" : { "Fn::GetAtt" : [ "TileserverELB", "DNSName" ] }
+         },
+         "Type" : "A"
+      }
+    },
+    
+    "PrimaryPublicDNSRecord" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "Condition": "IsPrimaryStack",
+      "Properties" : {
+         "HostedZoneId" : { "Ref": "PublicZoneID" },
+         "Comment" : "DNS name for my instance.",
+         "Name" : { "Fn::Sub": "tileserver.${ParentDNSName}." },
+         "AliasTarget": {
+            "HostedZoneId" : { "Fn::GetAtt" : [ "PrimaryApiDomainName", "RegionalHostedZoneId" ] },
+            "DNSName" : { "Fn::GetAtt" : [ "PrimaryApiDomainName", "RegionalDomainName" ] },
+            "EvaluateTargetHealth" : "false"
+         },
+         "Type" : "A"
+      }
+    },    
+    "PrimaryPrivateDNSRecord" : {
+      "Type" : "AWS::Route53::RecordSet",
+      "Condition": "IsPrimaryStack",
+      "Properties" : {
+         "HostedZoneId" : { "Ref": "PrivateZoneID" },
+         "Comment" : "DNS name for my instance.",
+         "Name" : { "Fn::Sub": "tileserver.${ParentDNSName}." },
+         "AliasTarget": {
+            "HostedZoneId" : { "Fn::GetAtt" : [ "TileserverELB", "CanonicalHostedZoneID" ] },
+            "DNSName" : { "Fn::GetAtt" : [ "TileserverELB", "DNSName" ] }
+         },
+         "Type" : "A"
+      }
+    },
+
+    "KinesisFirehoseDeliveryStream": {
+      "DependsOn": ["KinesisFirehoseDeliveryPolicy"],
+      "Type": "AWS::KinesisFirehose::DeliveryStream",
+      "Properties": {
+        "DeliveryStreamName": "tileserver-requests-firehose",
+        "DeliveryStreamType": "DirectPut",
+        "S3DestinationConfiguration": {
+          "BucketARN": "arn:aws:s3:::advanced-analytics-tileserver-request-logs",
+          "BufferingHints": {
+            "IntervalInSeconds": "300",
+            "SizeInMBs": "5"
+          },
+          "CompressionFormat": "UNCOMPRESSED",
+          "RoleARN": {"Fn::GetAtt" : ["KinesisFirehoseDeliveryRole", "Arn"] }
+        }
+      }
+    },
+    "KinesisFirehoseDeliveryRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName": { "Fn::Sub": "AADev-TileserverFirehoseRole-${StackSuffix}" },
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "",
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "firehose.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
+      }
+    },
+    "KinesisFirehoseDeliveryPolicy": {
+      "Type": "AWS::IAM::Policy",
+      "Properties": {
+        "PolicyName": { "Fn::Sub": "AADev-TileserverFirehosePolicy-${StackSuffix}" },
+        "PolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Action": [
+                "s3:AbortMultipartUpload",
+                "s3:GetBucketLocation",
+                "s3:GetObject",
+                "s3:ListBucket",
+                "s3:ListBucketMultipartUploads",
+                "s3:PutObject"
+              ],
+              "Resource": [
+                "arn:aws:s3:::advanced-analytics-tileserver-request-logs*"
+              ]
+            }
+          ]
+        },
+        "Roles": [{"Ref": "KinesisFirehoseDeliveryRole"}]
+      }
+    }
+        
+    
+  },
+
+  "Outputs" : {
+    "URL" : {
+      "Description" : "The URL of the website",
+      "Value" :  { "Fn::Join" : [ "", [ "https://", { "Ref": "ApiDomainName" } ]]}
+    }
+  }
+}

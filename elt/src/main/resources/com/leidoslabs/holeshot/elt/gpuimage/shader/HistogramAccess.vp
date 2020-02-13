@@ -1,0 +1,102 @@
+uniform ivec2 fbDim;
+uniform int buckets;
+uniform int maxPixel;
+
+const float MAX_X = 1.0;
+const float MIN_X = -1.0;
+const float MAX_Y = 1.0;
+const float MIN_Y = -1.0;
+
+ivec2 myFBDim;
+int myBuckets;
+int myMaxPixel;
+
+vec2 UNIFORM_PIXEL;
+vec2 UNIFORM_HALF_PIXEL;
+vec2 TEXTURE_PIXEL;
+vec2 TEXTURE_HALF_PIXEL;
+int PIXELS_PER_BUCKET;
+
+void resetFBSize(ivec2 newFBSize, int maxPixelParm, int bucketsParm) {
+   myFBDim = ivec2(newFBSize);
+   myMaxPixel = maxPixelParm;
+   myBuckets = bucketsParm;
+
+   UNIFORM_PIXEL = vec2(2.0 / float(myFBDim.x),
+                        2.0 / float(myFBDim.y));
+   UNIFORM_HALF_PIXEL = UNIFORM_PIXEL / 2.0;
+
+   TEXTURE_PIXEL = vec2(1.0 / float(myFBDim.x),
+                        1.0 / float(myFBDim.y));
+   TEXTURE_HALF_PIXEL = TEXTURE_PIXEL / 2.0;
+
+   PIXELS_PER_BUCKET = myMaxPixel / myBuckets;
+}
+
+int getFullIntensity(in float uniformIntensity) {
+   return int(uniformIntensity * float(myMaxPixel-1) + 0.5);
+}
+
+float getUniformIntensity(in int fullIntensity) {
+   return float(fullIntensity)/float(myMaxPixel-1);
+}
+
+int getTargetBucket(in float uniformIntensity) {
+   return getFullIntensity(uniformIntensity) / PIXELS_PER_BUCKET;
+}
+
+ivec2 getRowColPositionForIntensity(in float uniformIntensity) {
+   int targetBucket = getTargetBucket(uniformIntensity);
+   int col = int(mod(float(targetBucket), float(myFBDim.x)));
+   int row = targetBucket / myFBDim.x;
+   return ivec2(col, row);
+}
+
+vec2 getUniformPositionForRowCol(in ivec2 rowColPosition) {
+   return vec2(rowColPosition) * UNIFORM_PIXEL - 1.0 + UNIFORM_HALF_PIXEL;
+}
+
+vec2 getUniformPositionForIntensity(in float uniformIntensity) {
+   ivec2 rowColPosition = getRowColPositionForIntensity(uniformIntensity);
+   return getUniformPositionForRowCol(rowColPosition);
+}
+
+vec2 getTexturePositionFromUniform(in vec2 uniformPosition) {
+   return (uniformPosition + 1.0) / 2.0;
+}
+
+vec2 getUniformPositionFromTexture(in vec2 texturePosition) {
+   return texturePosition * 2.0 - 1.0;
+}
+
+ivec2 getRowColFromTexturePosition(in vec2 texPosition) {
+   return ivec2((texPosition - TEXTURE_HALF_PIXEL) / TEXTURE_PIXEL);
+}
+
+ivec2 getRowColFromUniformPosition(in vec2 uniformPosition) {
+   vec2 texPosition = getTexturePositionFromUniform(uniformPosition);
+   return getRowColFromTexturePosition(texPosition);
+}
+
+float getIntensityFromRowCol(in ivec2 rowCol) {
+   return float(rowCol.y * myFBDim.x + rowCol.x)/float(myMaxPixel-1);
+}
+
+float getIntensityFromUniformPosition(in vec2 uniformPosition) {
+   ivec2 rowCol = getRowColFromUniformPosition(uniformPosition);
+   return getIntensityFromRowCol(rowCol);
+}
+
+vec2 getTexturePositionForRowCol(in ivec2 rowColPosition) {
+   return getTexturePositionFromUniform(getUniformPositionForRowCol(rowColPosition));
+}
+
+vec2 getTexturePositionFromUniformIntensity(in float uniformIntensity) {
+   ivec2 texturePositionRowCol = getRowColPositionForIntensity(uniformIntensity);
+   return getTexturePositionForRowCol(texturePositionRowCol);
+}
+
+vec2 getTexturePositionFromFullIntensity(in int fullIntensity) {
+   return getTexturePositionFromUniformIntensity(getUniformIntensity(fullIntensity));
+}
+

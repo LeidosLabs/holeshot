@@ -1,0 +1,33 @@
+out VertexData {
+   vec3 colorFactor;
+} vs_out;
+
+uniform sampler2D rawImageTexture;
+uniform ivec2 rawImageTextureDim;
+uniform int pointsToSample;
+
+const float IGNORE_AS_BLACK = 0.2 / 256.0;
+
+
+#include HistogramAccess.vp
+
+void sampleInputTexture(in vec3 sampleColorFactor) {
+    int rawImageArea = rawImageTextureDim.x * rawImageTextureDim.y;
+    int pixelIndex = int(float(gl_InstanceID) / float(pointsToSample) * float(rawImageArea));
+    vec2 position = vec2(float(mod(pixelIndex, rawImageTextureDim.x)), float(pixelIndex/rawImageTextureDim.x)) / vec2(rawImageTextureDim);
+
+    vec4 texel = texture(rawImageTexture, position);
+    float uniformIntensity = dot(texel.rgb, sampleColorFactor);
+
+    if (uniformIntensity < IGNORE_AS_BLACK) {
+       vs_out.colorFactor = vec3(0.0, 0.0, 0.0);
+    } else {
+       vs_out.colorFactor = sampleColorFactor;
+    }
+
+    resetFBSize(fbDim, maxPixel, buckets);
+    vec2 uniformPosition = getUniformPositionForIntensity(uniformIntensity);
+
+    gl_Position = vec4(uniformPosition, 0.0, 1.0);
+    gl_PointSize = 1;
+}

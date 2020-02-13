@@ -1,0 +1,545 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "AWS CloudFormation Template: Template showing how to deploy The Grinder in a VPC with a public subnets. The console is deployed with headless configuration and an auto-scaling group of agents generate incrementally the desired load. You will be billed for the AWS resources used if you create a stack from this template.",
+
+  "Parameters" : {
+    "DesiredIncreasePercentage" : {
+      "Description" : "Percentage of increase between every out-scaling of the Agent servers",
+      "Type" : "Number",
+      "MinValue" : "1",
+      "Default" : "25"
+    },
+    "DesiredIntervalBetweenIncreases" : {
+      "Description" : "Number of seconds between every out-scaling of the Agent server fleet",
+      "Type" : "Number",
+      "MinValue" : "10",
+      "Default" : "150"
+    },
+    "DesiredLoad" : {
+      "Description" : "Tests Per Second (TPS) desired load",
+      "Type" : "Number",
+      "MinValue" : "1",
+      "Default" : "1000"
+    },
+    "Subnets" : {
+      "Type" : "CommaDelimitedList",
+      "Description" : "The list of SubnetIds for the WebServices, you should have at least 2 subnets in different availability zones",
+      "Default" : "subnet-7d7cb836,subnet-a2ed80ff"
+    },
+    "VpcId" : {
+      "Type" : "String",
+      "Description" : "The ID of the VPC to use",
+      "Default" : "vpc-29d17050"
+    },
+    "KeyPairName": {
+      "Description" : "Optional. Name of an existing EC2 KeyPair to enable SSH access to the instances",
+      "Type": "String",
+      "MinLength": "0",
+      "MaxLength": "255",
+      "AllowedPattern" : "[\\x20-\\x7E]*",
+      "ConstraintDescription" : "can contain only ASCII characters."
+    },
+    
+    "InstanceTypeAgent" : {
+      "Description" : "Agent hosts EC2 instance type",
+      "Type" : "String",
+      "Default" : "c5.4xlarge",
+      "AllowedValues" : [ "t1.micro","m1.small","m1.medium","m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.medium","m3.large","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","c3.large","c3.xlarge","c3.2xlarge","c3.4xlarge","c3.8xlarge","r3.large","r3.xlarge","r3.2xlarge","r3.4xlarge","r3.8xlarge", "c5.large", "c5.4xlarge", "c5.18xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+    "InstanceTypeConsole" : {
+      "Description" : "Console host EC2 instance type",
+      "Type" : "String",
+      "Default" : "c5.large",
+      "AllowedValues" : [ "t1.micro","m1.small","m1.medium","m1.large","m1.xlarge","m2.xlarge","m2.2xlarge","m2.4xlarge","m3.medium","m3.large","m3.xlarge","m3.2xlarge","c1.medium","c1.xlarge","c3.large","c3.xlarge","c3.2xlarge","c3.4xlarge","c3.8xlarge","r3.large","r3.xlarge","r3.2xlarge","r3.4xlarge","r3.8xlarge", "c5.large", "c5.4xlarge", "c5.18xlarge"],
+      "ConstraintDescription" : "must be a valid EC2 instance type."
+    },
+    
+    "MaxAgents" : {
+      "Description" : "Maximal Number of EC2 instances to launch for the Agent servers",
+      "Type" : "Number",
+      "MinValue" : "1",
+      "Default" : "20"
+    },
+    
+    "TestProperties": {
+      "Description" : "Name of the properties file within the specified Test directory. E.g. grinder.properties",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "255",
+      "AllowedPattern" : ".*\\.properties",
+      "Default" : "grinder.properties",
+      "ConstraintDescription" : "can contain only ASCII characters."
+    },
+    "TestDirectory": {
+      "Description" : "S3 URL location of the test directory to be used. E.g. s3://yourbucket/tests/grinder-tests",
+      "Type": "String",
+      "MinLength": "1",
+      "MaxLength": "1000",
+      "AllowedPattern" : "s3://.*",
+      "Default" : "s3://your-bucket/test-dir",
+      "ConstraintDescription" : "can contain only ASCII characters."
+    }
+  },
+  "Conditions": {
+    "KeyPairProvided": {"Fn::Not": [{"Fn::Equals" : [{"Ref" : "KeyPairName"}, ""]}]}
+  },  
+  "Mappings" : {
+    "AWSInstanceType2Arch" : {
+      "t1.micro"    : { "Arch" : "EBS64PV" },
+      "m1.small"    : { "Arch" : "EBS64PV" },
+      "m1.medium"   : { "Arch" : "EBS64PV" },
+      "m1.large"    : { "Arch" : "EBS64PV" },
+      "m1.xlarge"   : { "Arch" : "EBS64PV" },
+      "m2.xlarge"   : { "Arch" : "EBS64PV" },
+      "m2.2xlarge"  : { "Arch" : "EBS64PV" },
+      "m2.4xlarge"  : { "Arch" : "EBS64PV" },
+      "m3.medium"   : { "Arch" : "EBS64PV" },
+      "m3.large"  	: { "Arch" : "EBS64PV" },
+      "m3.xlarge"   : { "Arch" : "EBS64PV" },
+      "m3.2xlarge"  : { "Arch" : "EBS64PV" },
+      "c1.medium"   : { "Arch" : "EBS64PV" },
+      "c1.xlarge"   : { "Arch" : "EBS64PV" },
+      "c3.large"   	: { "Arch" : "EBS64PV" },
+      "c3.xlarge"   : { "Arch" : "EBS64PV" },
+      "c3.2xlarge" 	: { "Arch" : "EBS64PV" },
+      "c3.4xlarge" 	: { "Arch" : "EBS64PV" },
+      "c3.8xlarge" 	: { "Arch" : "EBS64PV" },
+      "c5.large"   : { "Arch" : "EBS64HVM" },   
+      "c5.4xlarge"   : { "Arch" : "EBS64HVM" },   
+      "c5.18xlarge"   : { "Arch" : "EBS64HVM" },   
+      "r3.large"   	: { "Arch" : "EBS64HVM" },
+      "r3.xlarge"   : { "Arch" : "EBS64HVM" },
+      "r3.2xlarge" 	: { "Arch" : "EBS64HVM" },
+      "r3.4xlarge" 	: { "Arch" : "EBS64HVM" },
+      "r3.8xlarge" 	: { "Arch" : "EBS64HVM" }   
+    },
+
+	"AWSRegionArch2AMI" : {
+	 "us-east-1"	 	: { "EBS64PV" : "ami-2f726546", "EBS32PV" : "ami-4b726522", "IS64PV" : "ami-6b726502", "IS32PV" : "ami-f9736490", "EBS64HVM" : "ami-0b33d91d", "IS64HVM" : "ami-f1746398", "EBS64GPUHVM" : "ami-9b7463f2", "EBS64G2HVM" : "ami-018e9968" },
+	 "us-west-1"	 	: { "EBS64PV" : "ami-84f1cfc1", "EBS32PV" : "ami-faf1cfbf", "IS64PV" : "ami-f0f1cfb5", "IS32PV" : "ami-e0f1cfa5", "EBS64HVM" : "ami-e6f1cfa3", "IS64HVM" : "ami-caf1cf8f", "EBS64GPUHVM" : "NOT_YET_SUPPORTED", "EBS64G2HVM" : "ami-0ed2ec4b" },
+	 "us-west-2"	 	: { "EBS64PV" : "ami-b8f69f88", "EBS32PV" : "ami-b6f69f86", "IS64PV" : "ami-58f69f68", "IS32PV" : "ami-7cf69f4c", "EBS64HVM" : "ami-60f69f50", "IS64HVM" : "ami-c6f79ef6", "EBS64GPUHVM" : "NOT_YET_SUPPORTED", "EBS64G2HVM" : "ami-fe3e56ce" },
+	 "eu-west-1"	 	: { "EBS64PV" : "ami-a921dfde", "EBS32PV" : "ami-ab21dfdc", "IS64PV" : "ami-a121dfd6", "IS32PV" : "ami-b921dfce", "EBS64HVM" : "ami-bb21dfcc", "IS64HVM" : "ami-0f21df78", "EBS64GPUHVM" : "ami-b521dfc2", "EBS64G2HVM" : "ami-735da304" },
+	 "ap-southeast-1"	: { "EBS64PV" : "ami-787c2c2a", "EBS32PV" : "ami-7a7c2c28", "IS64PV" : "ami-107c2c42", "IS32PV" : "ami-127c2c40", "EBS64HVM" : "ami-727c2c20", "IS64HVM" : "ami-627c2c30", "EBS64GPUHVM" : "NOT_YET_SUPPORTED", "EBS64G2HVM" : "NOT_YET_SUPPORTED" },
+	 "ap-northeast-1"	: { "EBS64PV" : "ami-a1bec3a0", "EBS32PV" : "ami-9fbec39e", "IS64PV" : "ami-91bec390", "IS32PV" : "ami-7dbec37c", "EBS64HVM" : "ami-ebbfc2ea", "IS64HVM" : "ami-a3bfc2a2", "EBS64GPUHVM" : "NOT_YET_SUPPORTED", "EBS64G2HVM" : "ami-6bd7aa6a" },
+	 "ap-southeast-2"	: { "EBS64PV" : "ami-0bc85031", "EBS32PV" : "ami-13c85029", "IS64PV" : "ami-57c8506d", "IS32PV" : "ami-51c8506b", "EBS64HVM" : "ami-25c8501f", "IS64HVM" : "ami-99c850a3", "EBS64GPUHVM" : "NOT_YET_SUPPORTED", "EBS64G2HVM" : "NOT_YET_SUPPORTED" },
+	 "sa-east-1"	 	: { "EBS64PV" : "ami-89de7c94", "EBS32PV" : "ami-a3de7cbe", "IS64PV" : "ami-09df7d14", "IS32PV" : "ami-05de7c18", "EBS64HVM" : "ami-3bde7c26", "IS64HVM" : "ami-19de7c04", "EBS64GPUHVM" : "NOT_YET_SUPPORTED", "EBS64G2HVM" : "NOT_YET_SUPPORTED" }
+	}
+  },
+
+  "Resources" : {
+    "ConsoleHost" : {
+      "Type" : "AWS::EC2::Instance",
+      "Metadata" : {
+		  "AWS::CloudFormation::Init" : {
+      		"configSets" : {
+		        "default" : [ "grinder" , "jq", "user", "scripts" ]
+		    },
+		    "grinder" : {
+		      "sources" : {
+				"/opt/grinder" : "http://downloads.sourceforge.net/project/grinder/The%20Grinder%203/3.11/grinder-3.11-binary.zip"
+		      }
+		    },
+		    "jq" : {
+				"files" : {
+				  "/usr/bin/jq" : {
+        			"source" : "http://stedolan.github.io/jq/download/linux64/jq",
+				    "mode"  : "000711",
+				    "owner" : "root",
+				    "group" : "root"
+				  }
+				}
+		    },
+		    "user" : {
+	           "commands" : {
+				    "adduser" : {
+				        "command" : "useradd grinder"
+				    }
+				}
+		    },
+		    "scripts" : {
+				"files" : {
+				  "/home/grinder/console_headless_start.sh" : {
+        			"content"	: { "Fn::Join" : ["", [
+						"#!/bin/bash\n",
+						"java -classpath /opt/grinder/grinder-3.11/lib/grinder.jar \\\n",
+						" -Dgrinder.console.httpHost=0.0.0.0 \\\n",
+						" -Dgrinder.console.distributionDirectory=$1 \\\n",
+						" -Dgrinder.console.propertiesFile=$1/$2 \\\n",
+						" net.grinder.Console -headless > /dev/null\n"
+   				      ]]},
+				    "mode"  	: "000500",
+				    "owner" 	: "grinder",
+				    "group" 	: "grinder"
+				  },
+				  "/home/grinder/console_distribute_and_start_workers.sh" : {
+        			"content"	: { "Fn::Join" : ["", [
+						"#!/bin/bash\n",
+						"curl -s -X POST http://localhost:6373/files/distribute\n",
+						"curl -s -X POST http://localhost:6373/agents/start-workers\n"
+   				      ]]},
+				    "mode"  	: "000500",
+				    "owner" 	: "grinder",
+				    "group" 	: "grinder"
+				  },
+				  "/home/grinder/console_put_metrics_to_cloudwatch.sh" : {
+        			"content"	: { "Fn::Join" : ["", [
+						"#!/bin/bash\n",
+						"TOTALS=$(curl -s -X GET http://localhost:6373/recording/data | jq \".totals\")\n",
+						"TESTS=$(echo $TOTALS | jq \".[0]\")\n",
+      				"TSMP=$(date +%s)\n\n",
+						
+						"if [[ \"$TESTS\" =~ ^[1-9][0-9]*$ ]]; then \n",
+						"\t if [ -f ~/.grinder_stats ]; then \n",
+						"\t\t . ~/.grinder_stats \n",
+						"\t\t TPS=$(( ($TESTS-$PREV_TESTS)/($TSMP-$PREV_TSMP) )) \n",
+						"\t\t aws --region ", { "Ref" : "AWS::Region" }, " cloudwatch put-metric-data --namespace GRINDER --dimensions \"Stack=", { "Ref" : "AWS::StackName" }, "\" --metric-name TPS --value=$TPS \n",
+						"\t fi \n",
+						"\t echo 'PREV_TESTS='$TESTS > ~/.grinder_stats \n",
+						"\t echo 'PREV_TSMP='$TSMP  >> ~/.grinder_stats \n\n",
+      
+						"\t COLUMNS=$(curl -s -X GET http://localhost:6373/recording/data | jq \".columns | .[]\") \n",
+						"\t i=0 \n",
+						"\t echo \"$COLUMNS\" | while read line; do \n",
+						"\t\t METRIC_NAME=`echo \"Total $line\" | sed 's/.*/\\L&/; s/[a-z]*/\\u&/g' | tr -d ' ()\"'` \n",
+						"\t\t METRIC_VAL=`echo $TOTALS | jq \".[$i]\"` \n",
+						"\t\t aws --region ", { "Ref" : "AWS::Region" }, " cloudwatch put-metric-data --namespace GRINDER --dimensions \"Stack=", { "Ref" : "AWS::StackName" }, "\" --metric-name $METRIC_NAME --value=$METRIC_VAL \n",
+						"\t\t (( i++ )) \n",
+						"\t done \n",
+						"\t # Reset the aggregate statistics every 5 minutes\n",
+						"\t if [ ! -e /tmp/lastreset ] || [ $(($(date +%s) - $(date +%s -r /tmp/lastreset))) -gt 300 ]; then\n",
+						"\t    curl -s -X GET http://localhost:6373/recording/reset\n",
+						"\t    touch /tmp/lastreset\n", 
+						"\t fi\n", 
+						"fi \n"
+   				      ]]},
+				    "mode"  	: "000500",
+				    "owner" 	: "grinder",
+				    "group" 	: "grinder"
+				  },
+				  "/home/grinder/agent_start.sh" : {
+        			"content"	: { "Fn::Join" : ["", [
+						"#!/bin/bash\n",
+						"EC2_INSTANCE_ID=\"`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`\"\n",
+      
+						"java -classpath /opt/grinder/grinder-3.11/lib/grinder.jar \\\n",
+						" -Dgrinder.consoleHost=$1 \\\n",
+						" -Dgrinder.hostID=\"$EC2_INSTANCE_ID\" \\\n",
+						" net.grinder.Grinder > /dev/null\n"
+   				      ]]},
+				    "mode"  	: "000500",
+				    "owner" 	: "grinder",
+				    "group" 	: "grinder"
+				  }
+				}
+		    }
+		  }
+		},
+      "Properties" : {
+        "InstanceType" : { "Ref" : "InstanceTypeConsole" },
+        "KeyName"  : {
+	      "Fn::If" : [
+	        "KeyPairProvided",
+	        { "Ref" : "KeyPairName" },
+	        {"Ref" : "AWS::NoValue"}
+	      ]},
+        "ImageId"  : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceTypeConsole" }, "Arch" ] } ] },
+        "IamInstanceProfile" : { "Ref" : "ConsoleInstanceProfile" }, 
+        "Tags" : [
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "", [ "Grinder - ", { "Ref" : "AWS::StackName" }, " - Console Host"]]} }
+        ],
+        "NetworkInterfaces":[
+          {
+			   "AssociatePublicIpAddress" : true,
+			   "DeleteOnTermination" : true,
+			   "DeviceIndex" : "0",
+			   "GroupSet" : [ { "Ref" : "ConsoleSecurityGroup" } ],
+			   "SubnetId" : { "Fn::Select" : [ "0", {"Ref": "Subnets"} ] }
+			}
+        ],
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+			"#!/bin/bash\n",
+   			"# Helper function\n",
+			"function error_exit\n",
+          	"{\n",
+          	"  /opt/aws/bin/cfn-signal -e 1 -r \"$1\" '", { "Ref" : "ConsoleHostWaitHandle" }, "'\n",
+          	"  exit 1\n",
+          	"}\n",
+   
+	        "# Get Updates _Before_ CfnInit Runs\n",
+	        "yum update -y\n",          
+
+			"# Install packages and write files in AWS::CloudFormation::Init\n",
+            "/opt/aws/bin/cfn-init -s ", { "Ref" : "AWS::StackName" }, " -r ConsoleHost ",
+            "    --region ", { "Ref" : "AWS::Region" }, " || error_exit 'Failed to run cfn-init'\n",
+   
+          "GRINDER_DIST_DIR=/home/grinder/tests && mkdir $GRINDER_DIST_DIR\n",
+          "aws --region ", { "Ref" : "AWS::Region" }, " s3 sync ", { "Ref" : "TestDirectory" }, " $GRINDER_DIST_DIR || error_exit 'Failed to download the test scripts.'\n",
+		  "GRINDER_PROP_FILE=", { "Ref" : "TestProperties" }, "\n",
+		  "[ -f $GRINDER_DIST_DIR/$GRINDER_PROP_FILE ] || error_exit 'Properties file does not exist.'\n",  
+    
+    	  "# start console\n",
+          "runuser -l grinder -c \"sh ~/console_headless_start.sh $GRINDER_DIST_DIR $GRINDER_PROP_FILE &\"\n",
+     
+          "runuser -l grinder -c '(crontab -l ; echo \"*/1 * * * * sh ~/console_distribute_and_start_workers.sh\")          | crontab -'\n",
+          "runuser -l grinder -c '(crontab -l ; echo \"*/1 * * * * sh ~/console_put_metrics_to_cloudwatch.sh\")             | crontab -'\n",
+          "runuser -l grinder -c '(crontab -l ; echo \"*/1 * * * * sleep 30 && sh ~/console_put_metrics_to_cloudwatch.sh\") | crontab -'\n",
+          
+      	  "# iptables redirection from 80 to 6373\n",
+          "iptables -t nat -A PREROUTING -p tcp --dport 80 -j REDIRECT --to-port 6373\n",
+          "/opt/aws/bin/cfn-signal -e 0 '", { "Ref" : "ConsoleHostWaitHandle" }, "'\n"
+        ]]}}
+        
+      }
+    },
+    
+    "ConsoleHostWaitHandle" : {
+	     "Type" : "AWS::CloudFormation::WaitConditionHandle",
+	     "Properties" : {
+	     }
+	}, 
+	 "ConsoleHostWaitCondition" : {
+	    "Type" : "AWS::CloudFormation::WaitCondition",
+	    "DependsOn" : "ConsoleHost",
+	    "Properties" : {
+	        "Handle" : { "Ref" : "ConsoleHostWaitHandle" },
+	         "Timeout" : "600"
+	    }
+	},
+    "ConsoleSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable access to the Console host",
+        "VpcId" : { "Ref" : "VpcId" },
+        "Tags" : [
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "", [ "Grinder - ", { "Ref" : "AWS::StackName" }, " - Console Security Group"]]} }
+        ],
+        "SecurityGroupIngress" : [ 
+          { "IpProtocol" : "tcp", 	"FromPort" : "22",  	"ToPort" : "22",  	"CidrIp" : "0.0.0.0/0"},
+          { "IpProtocol" : "tcp", 	"FromPort" : "6373",  	"ToPort" : "6373",  "CidrIp" : "0.0.0.0/0"},
+          { "IpProtocol" : "tcp", 	"FromPort" : "80",  	"ToPort" : "80",  	"CidrIp" : "0.0.0.0/0"},
+          { "IpProtocol" : "-1", 	"FromPort" : "0",  		"ToPort" : "65535",  "SourceSecurityGroupId" : { "Ref" : "AgentSecurityGroup" }}
+        ]
+      }
+    },
+    
+    "AgentSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable access to the Agent hosts",
+        "VpcId" : { "Ref" : "VpcId" },
+        "Tags" : [
+          { "Key" : "Name", "Value" : { "Fn::Join" : [ "", [ "Grinder - ", { "Ref" : "AWS::StackName" }, " - Agent Security Group"]]} }
+        ],
+        "SecurityGroupIngress" : [ 
+          { "IpProtocol" : "tcp", 	"FromPort" : "22",  	"ToPort" : "22",  	"CidrIp" : "0.0.0.0/0"}
+        ]
+      }
+    },
+    
+    "AgentSecurityGroupIngress": {
+        "Type": "AWS::EC2::SecurityGroupIngress",
+        "Properties": {
+            "GroupId": { "Ref": "AgentSecurityGroup" },
+            "IpProtocol": "-1",
+            "FromPort": "0",
+            "ToPort": "65535",
+            "SourceSecurityGroupId": { "Ref": "ConsoleSecurityGroup" }
+        }
+    },
+
+	"ConsoleRole": {
+         "Type": "AWS::IAM::Role",
+         "Properties": {
+            "AssumeRolePolicyDocument": {
+               "Version" : "2012-10-17",
+               "Statement": [ {
+                  "Effect": "Allow",
+                  "Principal": {
+                     "Service": [ "ec2.amazonaws.com" ]
+                  },
+                  "Action": [ "sts:AssumeRole" ]
+               } ]
+            },
+            "Path": "/",
+            "Policies": [ {
+               "PolicyName": "console",
+               "PolicyDocument": {
+                  "Version" : "2012-10-17",
+                  "Statement": [ {
+                     "Effect": "Allow",
+                     "Action": [
+                       "s3:*",
+                       "cloudwatch:*" 
+                     ],
+                     "Resource": "*"
+                  } ]
+               }
+               } ]
+            }
+         },
+         "ConsoleInstanceProfile": {
+         "Type": "AWS::IAM::InstanceProfile",
+         "Properties": {
+            "Path": "/",
+            "Roles": [ {
+               "Ref": "ConsoleRole"
+            } ]
+         }
+      },
+      
+     "AgentsFleet" : {
+      "Type" : "AWS::AutoScaling::AutoScalingGroup",
+      "Properties" : {
+        "VPCZoneIdentifier" : { "Ref": "Subnets" },
+        "LaunchConfigurationName" : { "Ref" : "AgentLaunchConfig"  },
+        "MinSize" : "1",
+        "MaxSize" : { "Ref" : "MaxAgents" },
+        "DesiredCapacity" : "1",
+        "MetricsCollection" : [
+           { "Granularity": "1Minute",
+             "Metrics": [
+                "GroupMinSize",
+                "GroupMaxSize",
+                "GroupTotalInstances"
+             ]
+           }
+        ]
+      }
+    },
+    
+    "AgentsFleetScaleOutPolicy" : {
+	   "Type" : "AWS::AutoScaling::ScalingPolicy",
+	   "Properties" : {
+	      "AdjustmentType" : "PercentChangeInCapacity",
+	      "AutoScalingGroupName" : { "Ref" : "AgentsFleet" },
+	      "Cooldown" : { "Ref" : "DesiredIntervalBetweenIncreases" },
+	      "ScalingAdjustment" : { "Ref" : "DesiredIncreasePercentage" }
+	   }
+    },
+
+          
+    "AgentLaunchConfig"  : {
+      "Type" : "AWS::AutoScaling::LaunchConfiguration",
+      "Metadata" : {
+		  "AWS::CloudFormation::Init" : {
+      		"configSets" : {
+		        "default" : [ "grinder" , "jq", "user", "scripts" ]
+		    },
+		    "grinder" : {
+		      "sources" : {
+				"/opt/grinder" : "http://downloads.sourceforge.net/project/grinder/The%20Grinder%203/3.11/grinder-3.11-binary.zip"
+		      }
+		    },
+		    "jq" : {
+				"files" : {
+				  "/usr/bin/jq" : {
+        			"source" : "http://stedolan.github.io/jq/download/linux64/jq",
+				    "mode"  : "000711",
+				    "owner" : "root",
+				    "group" : "root"
+				  }
+				}
+		    },
+		    "user" : {
+	           "commands" : {
+				    "adduser" : {
+				        "command" : "useradd grinder"
+				    }
+				}
+		    },
+		    "scripts" : {
+				"files" : {
+				  "/home/grinder/agent_start.sh" : {
+        			"content"	: { "Fn::Join" : ["", [
+						"#!/bin/bash\n",
+						"EC2_INSTANCE_ID=\"`wget -q -O - http://169.254.169.254/latest/meta-data/instance-id`\"\n",
+      
+						"java -classpath /opt/grinder/grinder-3.11/lib/grinder.jar \\\n",
+						" -Dgrinder.consoleHost=$1 \\\n",
+						" -Dgrinder.hostID=\"$EC2_INSTANCE_ID\" \\\n",
+						" net.grinder.Grinder > /dev/null\n"
+   				      ]]},
+				    "mode"  	: "000500",
+				    "owner" 	: "grinder",
+				    "group" 	: "grinder"
+				  }
+				}
+		    }
+		  }
+		},
+      "Properties" : {
+        "ImageId"        : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" }, { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceTypeAgent" }, "Arch" ] } ] },
+        "KeyName"  : {
+	      "Fn::If" : [
+	        "KeyPairProvided",
+	        { "Ref" : "KeyPairName" },
+	        {"Ref" : "AWS::NoValue"}
+	      ]},
+        "SecurityGroups" : [ { "Ref" : "AgentSecurityGroup" } ],
+        "InstanceType"   : { "Ref" : "InstanceTypeAgent" },
+        "AssociatePublicIpAddress" : "true",
+        "UserData"       : { "Fn::Base64" : { "Fn::Join" : ["", [
+			"#!/bin/bash\n",
+	        "# Get Updates _Before_ CfnInit Runs\n",
+	        "yum update -y\n",          
+
+			"# Install packages and write files in AWS::CloudFormation::Init\n",
+            "/opt/aws/bin/cfn-init -s ", { "Ref" : "AWS::StackName" }, " -r AgentLaunchConfig ",
+            "    --region ", { "Ref" : "AWS::Region" }, "\n",
+         
+			"GRINDER_CONSOLE_HOST=",{ "Fn::GetAtt" : [ "ConsoleHost", "PrivateIp" ]},"\n",
+			"runuser -l grinder -c \"sh ~/agent_start.sh $GRINDER_CONSOLE_HOST &\"\n"
+        ]]}}
+      },
+      "DependsOn" : "ConsoleHostWaitCondition"
+    },
+
+    "ScaleUpAlarm"  : {
+      "Type" : "AWS::CloudWatch::Alarm",
+      "Properties" 			: {
+        "AlarmName"			:  { "Fn::Join" : [ "", [ "GrinderAlarm-", { "Ref" : "AWS::StackName" }]]},
+        "AlarmDescription"	:  "Grinder Alarm to scale out to the required load",
+        "AlarmActions" 		: [ { "Ref": "AgentsFleetScaleOutPolicy" } ], 
+        "Namespace"			: "GRINDER",
+        "MetricName" 		: "TotalPeakTps",
+        "Dimensions" 		: [ {
+            "Name" : "Stack",
+            "Value" : { "Ref" : "AWS::StackName" } 
+          } ],
+        "EvaluationPeriods"	: "2",
+        "Period"			: "60",
+        "Statistic" 		: "Maximum",
+        "ComparisonOperator": "LessThanThreshold",
+        "Threshold" 		: { "Ref" : "DesiredLoad" }
+      }
+    }
+  },
+  "Outputs" : {
+    "CloudWatchMetrics" : {
+      "Description" : "The CloudWatch URL to show custom GRINDER metrics",
+      "Value" :  "https://console.aws.amazon.com/cloudwatch/home#metrics:metricFilter=Pattern%253DGRINDER"
+    }, 
+    "CloudWatchAlarm" : {
+      "Description" : "The CloudWatch Alarm used to scale out the Agent fleet",
+      "Value" : { "Fn::Join" : [ "", [ "https://console.aws.amazon.com/cloudwatch/home#alarm:alarmFilter=ANY;name=", { "Ref" : "ScaleUpAlarm" }]]}
+    }, 
+    "ConsoleIP" : {
+      "Description" : "IP of the Grinder Console",
+      "Value" :  { "Fn::GetAtt" : [ "ConsoleHost", "PublicIp" ]}
+    },
+    "GrinderConsoleProperties" : {
+      "Description" : "URL to Grinder Console Properties",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ConsoleHost", "PublicIp" ]}, "/properties"]]}
+    },
+    "GrinderConsoleStats" : {
+      "Description" : "URL to Grinder Console Data Statistics",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ConsoleHost", "PublicIp" ]}, "/recording/data"]]}
+    },
+    "GrinderConsoleAgents" : {
+      "Description" : "URL to Grinder Console Agents",
+      "Value" :  { "Fn::Join" : [ "", [ "http://", { "Fn::GetAtt" : [ "ConsoleHost", "PublicIp" ]}, "/agents/status"]]}
+    }
+   }
+}

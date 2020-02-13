@@ -1,0 +1,19 @@
+{
+  "version": "2.0",
+  "app_name": "ImageCatalogAPI",
+  "stages": {
+    "dev": {
+
+    },
+    "prod": {
+
+    }
+  },
+  "api_gateway_stage": "imagecatalog",
+  "subnet_ids": ["subnet-58fbd464"],
+  "security_group_ids": ["sg-e157bb90"],
+  "environment_variables": {
+    "ES_ENDPOINT": "ELASTICSEARCHENDPOINT",
+    "USER_POOL_ARN": "USERPOOLARN"
+  }
+}

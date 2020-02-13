@@ -1,0 +1,115 @@
+{
+  "Description": "Generic Custom::Resource for CloudFormation",
+  "Parameters": {
+    "LambdaTimeout": {
+      "Type": "Number",
+      "Default": 10
+    }
+  },
+  "Resources": {
+    "CustomResource": {
+      "Type": "AWS::Lambda::Function",
+      "Properties": {
+        "Handler": "index.handler",
+        "Role": {
+          "Fn::GetAtt": [
+            "CustomResourceRole",
+            "Arn"
+          ]
+        },
+        "Code": {
+          "ZipFile": "const AWS = require('aws-sdk'),\n  jmespath = require('jmespath'),\n  querystring = require('querystring'),\n  crypto = require('crypto'),\n  https = require(\"https\"),\n  url = require(\"url\");;\n\nexports.handler = (event, context, cb) => {\n  console.log('Request', JSON.stringify(Object.assign({}, event, {\n    ResourceProperties: null\n  })));\n  event.ResourceProperties = fixBooleans(event.ResourceProperties, event.PhysicalResourceId);\n  let args = event.ResourceProperties[event.RequestType];\n  if (!args) args = event.RequestType === 'Delete' ? {} : event.ResourceProperties['Create'];\n  ['Attributes', 'PhysicalResourceId', 'PhysicalResourceIdQuery', 'Parameters'].forEach(attr =>\n    args[attr] = args[attr] || event.ResourceProperties[attr]\n  );\n  if (event.RequestType === 'Delete') {\n    deleteResource(args, event, context, function(data) {\n      response.send(event, context, response.SUCCESS, {}, event.PhysicalResourceId);\n    });\n  } else if (event.RequestType === 'Create' || event.RequestType === 'Update') {\n    createOrUpdateResource(args, event, context, function(data) {\n      let props = event.ResourceProperties[event.RequestType] || event.ResourceProperties['Create'];\n      if (props.PhysicalResourceIdQuery) event.PhysicalResourceId = jmespath.search(data, props.PhysicalResourceIdQuery);\n      if (props.PhysicalResourceId) event.PhysicalResourceId = props.PhysicalResourceId;\n      if (props.Attributes) data = jmespath.search(data, props.Attributes);\n      response.send(event, context, response.SUCCESS, data, event.PhysicalResourceId || event.RequestId);\n    });\n  }\n};\n\nfunction random() {\n  return crypto.randomBytes(6).toString('base64').replace(/[\\+=\\/]/g, '').toUpperCase();\n}\n\nfunction fixBooleans(obj, physicalId) {\n  if (Array.isArray(obj)) return obj.map(fixBooleans);\n  else if (typeof obj === 'object') {\n    for (key in obj) obj[key] = fixBooleans(obj[key]);\n    return obj;\n  } else if (typeof obj === 'string')\n    return obj === 'true' ? true :\n      obj === 'false' ? false :\n      obj === 'null' ? null :\n      obj.replace(/\\${PhysicalId}/, physicalId).replace(/\\${Random}/, random());\n  else return obj;\n}\n\nfunction deleteResource(args, event, context, cb) {\n  request(args, event, function(err, data) {\n    if (err && args.IgnoreErrors !== true) {\n      response.send(event, context, response.FAILED, err, event.PhysicalResourceId);\n    } else cb(data);\n  });\n}\n\nfunction createOrUpdateResource(args, event, context, cb) {\n  request(args, event, function(err, data) {\n    if (err && args.IgnoreErrors !== true) {\n      response.send(event, context, response.FAILED, err, event.PhysicalResourceId);\n    } else cb(data);\n  });\n}\n\nfunction request(args, event, cb) {\n  if (event.RequestType === 'Delete' && !args.Action) return cb();\n  let client = new AWS[event.ResourceProperties.Service]();\n  client[args.Action](args.Parameters, cb);\n}\n\nlet response = {\n  SUCCESS: 'SUCCESS',\n  FAILED: 'FAILED',\n  send: (event, context, responseStatus, responseData, physicalResourceId) => {\n    let responseBody = {\n      Status: responseStatus,\n      Reason: responseData instanceof Error ? responseData.toString() : '',\n      PhysicalResourceId: physicalResourceId || context.logStreamName,\n      StackId: event.StackId,\n      RequestId: event.RequestId,\n      LogicalResourceId: event.LogicalResourceId,\n      Data: responseStatus === response.FAILED ? null : responseData,\n    };\n\n    console.log('Response', JSON.stringify(Object.assign({}, responseBody, {\n      Data: null\n    })));\n\n    var parsed = url.parse(event.ResponseURL);\n    https.request({\n      hostname: parsed.hostname,\n      path: parsed.path,\n      method: 'PUT',\n    }, res => () => context.done()).on(\"error\", function(error) {\n      console.log(error);\n      context.done();\n    }).end(JSON.stringify(responseBody));\n  },\n};\n"
+        },
+        "Runtime": "nodejs8.10",
+        "Timeout": {
+          "Ref": "LambdaTimeout"
+        }
+      }
+    },
+    "CustomResourceLogGroup": {
+      "Type": "AWS::Logs::LogGroup",
+      "Properties": {
+        "RetentionInDays": 7,
+        "LogGroupName": {
+          "Fn::Sub": "/aws/lambda/${CustomResource}"
+        }
+      }
+    },
+    "CustomResourceRole": {
+      "Type": "AWS::IAM::Role",
+      "Properties": {
+        "RoleName" : "AADev-CustomResourceRole",
+        "PermissionsBoundary" : "arn:aws:iam::199974664221:policy/DeveloperPolicy",
+        "AssumeRolePolicyDocument": {
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Effect": "Allow",
+              "Principal": {
+                "Service": "lambda.amazonaws.com"
+              },
+              "Action": "sts:AssumeRole"
+            }
+          ]
+        },
+        "ManagedPolicyArns": [
+          "arn:aws:iam::aws:policy/AWSLambdaFullAccess",
+          "arn:aws:iam::aws:policy/AmazonCognitoPowerUser"
+        ]
+      }
+    }
+  },
+  "Outputs": {
+    "ServiceToken": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CustomResource",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}:ServiceToken"
+        }
+      }
+    },
+    "Role": {
+      "Value": {
+        "Ref": "CustomResourceRole"
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}:Role"
+        }
+      }
+    },
+    "RoleArn": {
+      "Value": {
+        "Fn::GetAtt": [
+          "CustomResourceRole",
+          "Arn"
+        ]
+      },
+      "Export": {
+        "Name": {
+          "Fn::Sub": "${AWS::StackName}:RoleArn"
+        }
+      }
+    },
+    "TemplateName": {
+      "Value": "custom-resource"
+    },
+    "TemplateVersion": {
+      "Value": "103ffa7e700a9409450411479da6c6f1588d03e8"
+    },
+    "TemplateBuildDate": {
+      "Value": "2017-09-11T14:01:17Z"
+    }
+  },
+  "Metadata": {
+    "CfnInclude": {
+      "GitCommit": "103ffa7e700a9409450411479da6c6f1588d03e8",
+      "BuildDate": "2017-09-11T14:01:17.040Z"
+    }
+  }
+}

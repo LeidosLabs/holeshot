@@ -1,0 +1,61 @@
+openapi: 3.0.0
+servers:
+  - description: localhost
+    url: http://localhost:8080/api/chipper
+info:
+  description: API for Image Chipping Service
+  version: "1.0.0"
+  title: Image Chipping API
+  contact:
+    email: ray.roberts@leidos.com
+  license:
+    name: Apache 2.0
+    url: 'http://www.apache.org/licenses/LICENSE-2.0.html'
+tags:
+  - name: developers
+    description: Operations available to regular developers
+paths:
+  /chip:
+    get:
+      tags:
+        - developers
+      summary: Load an image to the viewer
+      operationId: loadImage
+      description: |
+        Creates a chip of an image
+      parameters:
+        - in: query
+          name: url
+          description: The url to the metadata.json for the image
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: bbox
+          description: The Bounding box of the image chip ulX,ulY,width,height (e.g. 0,0,256,256 )
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: outDim
+          description: The output Dimension width,height (e.g. 256,256 )
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Image chip in PNG format
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string

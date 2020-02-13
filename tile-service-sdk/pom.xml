@@ -1,0 +1,135 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+	<modelVersion>4.0.0</modelVersion>
+
+	<artifactId>tile-service-sdk</artifactId>
+	<parent>
+		<groupId>com.leidoslabs.holeshot</groupId>
+		<artifactId>holeshot</artifactId>
+		<version>0.0.1-SNAPSHOT</version>
+	</parent>
+
+
+	<dependencies>
+		<dependency>
+			<groupId>com.leidoslabs.holeshot</groupId>
+			<artifactId>edh2-security-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.leidoslabs.holeshot</groupId>
+			<artifactId>common</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.leidoslabs.holeshot</groupId>
+			<artifactId>photogrammetry</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.locationtech.jts</groupId>
+			<artifactId>jts-core</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.ehcache</groupId>
+			<artifactId>ehcache</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.joml</groupId>
+			<artifactId>joml</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>commons-io</groupId>
+			<artifactId>commons-io</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>io.scif</groupId>
+			<artifactId>scifio</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.google.guava</groupId>
+			<artifactId>guava</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-core</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-annotations</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>com.fasterxml.jackson.core</groupId>
+			<artifactId>jackson-databind</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.httpcomponents</groupId>
+			<artifactId>httpclient</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.apache.commons</groupId>
+			<artifactId>commons-collections4</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-log4j12</artifactId>
+		</dependency>
+		<dependency>
+			<groupId>org.slf4j</groupId>
+			<artifactId>slf4j-ext</artifactId>
+		</dependency>
+		
+		<dependency>
+			<groupId>com.amazonaws</groupId>
+			<artifactId>aws-java-sdk</artifactId>
+		</dependency>
+
+		<dependency>
+			<groupId>junit</groupId>
+			<artifactId>junit</artifactId>
+			<scope>test</scope>
+		</dependency>
+	</dependencies>
+
+	<build>
+		<plugins>
+			<plugin>
+				<groupId>org.codehaus.mojo</groupId>
+				<artifactId>jaxb2-maven-plugin</artifactId>
+				<executions>
+					<execution>
+						<id>xjc1</id>
+						<goals>
+							<goal>xjc</goal>
+						</goals>
+						<configuration>
+							<externalEntityProcessing>true</externalEntityProcessing>
+							<packageName>com.leidoslabs.holeshot.tileserver.mrf.jaxb</packageName>
+							<extension>true</extension>
+							<!-- catalog>src/main/resources/xjc.catalog</catalog-->
+							<episodeFileName>xjc1</episodeFileName>
+							<outputDirectory>${project.build.directory}/generated-sources/jaxb1</outputDirectory>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>				
+			<plugin>
+  			   <groupId>org.apache.maven.plugins</groupId>
+			   <artifactId>maven-deploy-plugin</artifactId>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-compiler-plugin</artifactId>
+				<configuration>
+					<source>${maven.compiler.source}</source>
+					<target>${maven.compiler.target}</target>
+				</configuration>
+			</plugin>
+		</plugins>
+	</build>
+</project>

@@ -1,0 +1,13 @@
+#version 400 core
+
+layout(location=0) in vec2 pos;
+
+uniform mat4 pMat;
+uniform vec3 color;
+
+out vec4 vertexColor;
+
+void main() {
+   gl_Position = pMat * vec4(pos.x, pos.y, 0.0f, 1.0f);
+   vertexColor = vec4(color, 1.0f);
+}

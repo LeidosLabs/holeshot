@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Created with Liquid Technologies Online Tools 1.0 (https://www.liquid-technologies.com) -->
+<xs:schema attributeFormDefault="unqualified" elementFormDefault="qualified" xmlns:xs="http://www.w3.org/2001/XMLSchema">
+  <xs:element name="MRF_META">
+    <xs:complexType>
+      <xs:sequence>
+        <xs:element name="Raster">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="Size">
+                <xs:complexType>
+                  <xs:attribute name="x" type="xs:unsignedLong" use="required" />
+                  <xs:attribute name="y" type="xs:unsignedLong" use="required" />
+                  <xs:attribute name="z" type="xs:unsignedLong" use="optional" />
+                  <xs:attribute name="c" type="xs:unsignedByte" use="required" />
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="PageSize">
+                <xs:complexType>
+                  <xs:attribute name="x" type="xs:unsignedLong" use="required" />
+                  <xs:attribute name="y" type="xs:unsignedLong" use="required" />
+                  <xs:attribute name="z" type="xs:unsignedLong" use="optional" />
+                  <xs:attribute name="c" type="xs:unsignedByte" use="required" />
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="Compression" default="PNG">
+                 <xs:simpleType>
+                 <xs:restriction base="xs:string">
+                    <xs:enumeration value="PNG"/>
+                    <xs:enumeration value="PPNG"/>
+                    <xs:enumeration value="JPEG"/>
+                    <xs:enumeration value="JPNG"/>
+                    <xs:enumeration value="NONE"/>
+                    <xs:enumeration value="DEFLATE"/>
+                    <xs:enumeration value="TIF"/>
+                 </xs:restriction>
+                 </xs:simpleType>
+              </xs:element>
+              <xs:element name="DataValues">
+                <xs:complexType>
+                  <xs:attribute name="NoData" type="xs:unsignedByte" use="optional" />
+                  <xs:attribute name="min" type="xs:unsignedByte" use="optional" />
+                  <xs:attribute name="max" type="xs:unsignedByte" use="optional" />
+                </xs:complexType>
+              </xs:element>
+              <xs:element name="Order" minOccurs="0">
+                 <xs:simpleType>
+                 <xs:restriction base="xs:string">
+                    <xs:enumeration value="BAND"/>
+                    <xs:enumeration value="PIXEL"/>
+                 </xs:restriction>
+                 </xs:simpleType>
+              </xs:element>
+              <xs:element name="Quality" minOccurs="0">
+                 <xs:simpleType>
+                    <xs:restriction base="xs:byte">
+                       <xs:minInclusive value="0"/>
+                       <xs:maxInclusive value="99"/>
+                   </xs:restriction>
+                </xs:simpleType>
+              </xs:element>              
+              <xs:element name="Photometric">
+                 <xs:simpleType>
+                 <xs:restriction base="xs:string">
+                    <xs:enumeration value="MULTISPECTRAL"/>
+                    <xs:enumeration value="RGB"/>
+                    <xs:enumeration value="YCC"/>
+                 </xs:restriction>
+                 </xs:simpleType>
+               </xs:element>
+              <xs:element name="DataType">
+                 <xs:simpleType>
+                 <xs:restriction base="xs:string">
+                    <xs:enumeration value="Byte"/>
+                    <xs:enumeration value="UInt16"/>
+                    <xs:enumeration value="Int16"/>
+                    <xs:enumeration value="Int32"/>
+                    <xs:enumeration value="UInt32"/>
+                    <xs:enumeration value="Float32"/>
+                    <xs:enumeration value="Float64"/>
+                 </xs:restriction>
+                 </xs:simpleType>
+               </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="Rsets">
+          <xs:complexType>
+            <xs:attribute name="model" use="required">
+                 <xs:simpleType>
+                 <xs:restriction base="xs:string">
+                    <xs:enumeration value="uniform"/>
+                 </xs:restriction>
+                 </xs:simpleType>
+            </xs:attribute>
+            <xs:attribute name="scale" type="xs:double" use="optional" default="2.0"/>
+          </xs:complexType>
+        </xs:element>
+        <xs:element name="GeoTags">
+          <xs:complexType>
+            <xs:sequence>
+              <xs:element name="BoundingBox">
+                <xs:complexType>
+                  <xs:attribute name="minx" type="xs:double" use="required" />
+                  <xs:attribute name="miny" type="xs:double" use="required" />
+                  <xs:attribute name="maxx" type="xs:double" use="required" />
+                  <xs:attribute name="maxy" type="xs:double" use="required" />
+                </xs:complexType>
+              </xs:element>
+            </xs:sequence>
+          </xs:complexType>
+        </xs:element>
+      </xs:sequence>
+    </xs:complexType>
+  </xs:element>
+</xs:schema>

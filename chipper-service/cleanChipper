@@ -1,0 +1,21 @@
+#!/bin/bash
+
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
+LEIDOSLABS="$(dirname $(dirname $DIR))"
+
+while read depDir
+do
+   find "$LEIDOSLABS/$depDir" -maxdepth 2 -name 'pom.xml' -print |
+   while read pomFile
+   do
+      pomDir="$(dirname $pomFile)"
+      cd $pomDir;mvn clean
+   done
+done <<EOF
+edh2-security-core
+elt
+leidos-geoint-services
+photogrammetry
+edh2-security-policy-generic
+imageop
+EOF

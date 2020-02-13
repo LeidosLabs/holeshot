@@ -1,0 +1,9 @@
+{
+  "flows": [
+    {
+      "filePattern": "/var/log/tileserver/request.log",
+      "deliveryStream": "tileserver-requests-firehose",
+      "initialPosition": "START_OF_FILE"
+    }
+  ]
+}

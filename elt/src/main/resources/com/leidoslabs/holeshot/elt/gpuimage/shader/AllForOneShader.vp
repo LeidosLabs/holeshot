@@ -1,0 +1,19 @@
+#version 400 core
+
+out VertexData {
+   flat int vertexInstance;
+} vs_out;
+
+#include HistogramAccess.vp
+
+void main() {
+    resetFBSize(fbDim, maxPixel, 1);
+    vs_out.vertexInstance = gl_InstanceID;
+
+    ivec2 originRowCol = ivec2(0,0);
+    vec2 uniformPositionForIntensity = getUniformPositionForRowCol(originRowCol);
+
+    gl_Position = vec4(uniformPositionForIntensity, 0.0, 1.0);
+    gl_PointSize = 1;
+
+}

@@ -1,0 +1,2 @@
+aws-requests-auth==0.4.2
+elasticsearch==6.3.1

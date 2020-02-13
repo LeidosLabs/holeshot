@@ -1,0 +1,59 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+      {
+        "type": "Feature",
+        "properties": {
+          "scalerank": 2,
+          "name": "Niagara Falls",
+          "comment": null,
+          "name_alt": null,
+          "lat_y": 43.087653,
+          "long_x": -79.044073,
+          "region": "North America",
+          "subregion": null,
+          "featureclass": "waterfall"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [-79.04411780507252, 43.08771393436908]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "scalerank": 2,
+          "name": "Salto Angel",
+          "comment": null,
+          "name_alt": "Angel Falls",
+          "lat_y": 5.686836,
+          "long_x": -62.061848,
+          "region": "South America",
+          "subregion": null,
+          "featureclass": "waterfall"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [-62.06181800038502, 5.686896063275327]
+        }
+      },
+      {
+        "type": "Feature",
+        "properties": {
+          "scalerank": 2,
+          "name": "Salto Angel 2",
+          "comment": null,
+          "name_alt": "Angel Falls 2",
+          "lat_y": 5.75,
+          "long_x": -61,
+          "region": "Souther America",
+          "subregion": null,
+          "featureclass": "waterfall"
+        },
+        "geometry": {
+          "type": "Point",
+          "coordinates": [-61, 5.75]
+        }
+      }
+    ]
+}

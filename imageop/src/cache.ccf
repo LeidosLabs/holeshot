@@ -1,0 +1,27 @@
+# DEFAULT CACHE REGION
+jcs.default=DC
+jcs.default.cacheattributes=org.apache.commons.jcs.engine.CompositeCacheAttributes
+jcs.default.cacheattributes.MaxObjects=2
+jcs.default.cacheattributes.MemoryCacheName=org.apache.commons.jcs.engine.memory.lru.LRUMemoryCache
+jcs.default.cacheattributes.DiskUsagePatternName=SWAP
+
+# CACHE REGIONS AVAILABLE
+jcs.region.memRegion=
+jcs.region.memRegion.cacheattributes=org.apache.commons.jcs.engine.CompositeCacheAttributes
+jcs.region.memRegion.cacheattributes.MaxObjects=100
+jcs.region.memRegion.cacheattributes.MemoryCacheName=org.apache.commons.jcs.engine.memory.lru.LRUMemoryCache
+jcs.region.memRegion.cacheattributes.DiskUsagePatternName=SWAP
+jcs.region.memRegion.elementattributes.IsSpool=false
+
+jcs.region.diskRegion=DC
+jcs.region.diskRegion.cacheattributes=org.apache.commons.jcs.engine.CompositeCacheAttributes
+jcs.region.diskRegion.cacheattributes.MaxObjects=0
+jcs.region.diskRegion.cacheattributes.DiskUsagePatternName=UPDATE
+
+# AVAILABLE AUXILIARY CACHES
+jcs.auxiliary.DC=org.apache.commons.jcs.auxiliary.disk.indexed.IndexedDiskCacheFactory
+jcs.auxiliary.DC.attributes=org.apache.commons.jcs.auxiliary.disk.indexed.IndexedDiskCacheAttributes
+jcs.auxiliary.DC.attributes.DiskPath=c:/Users/yims2/tilesregions2
+jcs.auxiliary.DC.attributes.maxKeySize=1000
+#jcs.auxiliary.DC.attributes.KeySize=100000
+jcs.auxiliary.DC.attributes.EventQueueType=SINGLE
