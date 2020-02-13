@@ -34,7 +34,7 @@ Image Tileserver with multi-tiered caching.
 
 ## HOLESHOT Architecture
 
-![Architecture](F:\dev\leidoslabs\holeshot\images\Architecture.png)
+![Architecture](./images/Architecture.png)
 
 ## HOLESHOT Components
 
@@ -50,3 +50,16 @@ Image Tileserver with multi-tiered caching.
   - Normalizes Metadata to a common metadata.json format.
   - Uses given RPCs, or calculates RPCs if they're not available.
   - Handles GeoTiff, Uncompressed NITF, and JPEG2K Compressed NITF (with the addition of an externally provided Kakadu library, not included).
+
+## Building
+
+###### Build Requirements:
+
+- OpenJDK 8
+- Ant
+- Maven
+
+Build:
+
+- mvn clean install
+

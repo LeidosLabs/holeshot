@@ -1,6 +1,0 @@
-[submodule "imaging-nitf"]
-	path = imaging-nitf
-	url = https://github.com/codice/imaging-nitf.git
-[submodule "usng4j"]
-	path = usng4j
-	url = https://github.com/codice/usng4j.git
