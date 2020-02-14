@@ -60,7 +60,7 @@ public class EHCacheDataStore extends AbstractSessionDataStore {
   }
 
   @Override
-  public SessionData load(String id) throws Exception {
+  public SessionData doLoad(String id) throws Exception {
     return cache.get(id);
   }
 

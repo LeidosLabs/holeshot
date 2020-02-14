@@ -29,6 +29,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
 import org.apache.commons.lang3.tuple.Pair;
 import org.eclipse.jetty.server.session.AbstractSessionDataStore;
 import org.eclipse.jetty.server.session.SessionData;
@@ -37,8 +38,10 @@ import org.eclipse.jetty.util.ClassLoadingObjectInputStream;
 import org.ehcache.impl.internal.util.ByteBufferInputStream;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
+
 import com.leidoslabs.holeshot.tileserver.cache.ByteBufferCodec;
 import com.leidoslabs.holeshot.tileserver.cache.RedisCache;
+
 import io.lettuce.core.RedisClient;
 import io.lettuce.core.api.StatefulRedisConnection;
 import io.lettuce.core.api.sync.RedisCommands;
@@ -77,7 +80,7 @@ public class RedisSessionDataStore extends AbstractSessionDataStore {
    * Load from id
    */
   @Override
-  public SessionData load(String id) throws Exception {
+  public SessionData doLoad(String id) throws Exception {
     SessionData result = null;
 
     if (RedisCache.getInstance().isAvailable()) {

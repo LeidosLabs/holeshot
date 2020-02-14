@@ -69,7 +69,7 @@ public class TieredSessionDataStore extends AbstractSessionDataStore {
   }
 
   @Override
-  public SessionData load(String id) throws Exception {
+  public SessionData doLoad(String id) throws Exception {
     SessionData result = null;
 
     final List<SessionDataStore> notFoundInStores = new Vector<SessionDataStore>();
