@@ -73,7 +73,7 @@ public abstract class GeointCoordinate<C> {
 
     /**
      * Get the image scale
-     * @return
+     * @return the image scale
      */
   public ImageScale getImageScale() {
      return imageScale;

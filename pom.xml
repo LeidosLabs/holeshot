@@ -11,6 +11,10 @@
 
 	<name>holeshot</name>
 
+	<prerequisites>
+		<maven>3.0.4</maven>
+	</prerequisites>
+
 	<properties>
 		<aws-lambda-java-core.version>1.2.0</aws-lambda-java-core.version>
 		<aws-lambda-java-events.version>1.3.0</aws-lambda-java-events.version>
@@ -1060,8 +1064,7 @@
 			<repositories>
 				<!--repository> <id>central</id> <name>central</name> <url>https://central.maven.org/maven2/</url> 
 					</repository -->
-				<!--repository> <id>codice</id> <name>Codice</name> <url>http://artifacts.codice.org/content/groups/public/</url> 
-					</repository -->
+
 				<repository>
 					<id>springsource-release</id>
 					<name>springsource-release</name>
@@ -1129,6 +1132,11 @@
 					<id>imageio-ext-repository</id>
 					<name>imageio-ext Repository</name>
 					<url>http://maven.geo-solutions.it/</url>
+				</repository>
+				<repository>
+					<id>codice</id>
+					<name>Codice</name>
+					<url>http://artifacts.codice.org/content/groups/public/</url>
 				</repository>
 			</repositories>
 			<pluginRepositories>
