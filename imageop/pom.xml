@@ -152,10 +152,6 @@
 			<groupId>javax.media</groupId>
 			<artifactId>jai_codec</artifactId>
 		</dependency>
-		<dependency>
-			<groupId>it.geosolutions.imageio-ext</groupId>
-			<artifactId>imageio-ext-kakadu</artifactId>
-		</dependency>
 	</dependencies>
 	<build>
 		<pluginManagement>

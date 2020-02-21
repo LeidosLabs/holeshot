@@ -13,14 +13,12 @@ import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 import java.util.stream.IntStream;
 
+import javax.imageio.ImageIO;
 import javax.imageio.ImageReader;
 import javax.imageio.stream.ImageInputStream;
 
 import org.codice.imaging.nitf.core.image.ImageMode;
 import org.codice.imaging.nitf.core.image.ImageSegment;
-
-import it.geosolutions.imageio.plugins.jp2k.JP2KKakaduImageReader;
-import it.geosolutions.imageio.plugins.jp2k.JP2KKakaduImageReaderSpi;
 
 /**
  * TileReader for UncompressedNITF
@@ -32,8 +30,7 @@ public class NITFJP2KCompressedTileReader extends NITFTileReader {
 
 	public NITFJP2KCompressedTileReader(final ImageSegment imageSegment) throws IOException {
 		super(imageSegment);
-		ImageReader reader = new JP2KKakaduImageReaderSpi().createReaderInstance();
-		
+		ImageReader reader = ImageIO.getImageReadersByMIMEType("image/jp2").next();
 		ImageInputStream imageInputStream = getImageSegment().getData();
 		imageInputStream.seek(0);
 		skipToMarker(imageInputStream, START_OF_IMAGE);

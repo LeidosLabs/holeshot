@@ -39,7 +39,6 @@
 		<gson.version>2.8.2</gson.version>
 		<guava.version>28.0-jre</guava.version>
 		<httpclient.version>4.5.4</httpclient.version>
-		<imageio-ext.version>1.3.1</imageio-ext.version>
 		<jackson.version>2.10.2</jackson.version>
 		<jacoco.version>0.7.5.201505241946</jacoco.version>
 		<jai-core.version>1.1.3</jai-core.version>
@@ -923,11 +922,6 @@
 				<artifactId>SystemTray</artifactId>
 				<version>${systemtray.version}</version>
 			</dependency>
-			<dependency>
-				<groupId>it.geosolutions.imageio-ext</groupId>
-				<artifactId>imageio-ext-kakadu</artifactId>
-				<version>${imageio-ext.version}</version>
-			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
@@ -1153,14 +1147,6 @@
 					<url>https://repo1.maven.org/maven2</url>
 				</repository>
 				<repository>
-					<snapshots>
-						<enabled>true</enabled>
-					</snapshots>
-					<id>imageio-ext-repository</id>
-					<name>imageio-ext Repository</name>
-					<url>http://maven.geo-solutions.it/</url>
-				</repository>
-				<repository>
 					<id>codice</id>
 					<name>Codice</name>
 					<url>http://artifacts.codice.org/content/groups/public/</url>
@@ -1252,14 +1238,6 @@
 					<name>Leidoslabs Central</name>
 					<url>https://nexus.leidoslabs.com/repository/leidoslabs-central/</url>
 				</repository>
-				<repository>
-					<snapshots>
-						<enabled>true</enabled>
-					</snapshots>
-					<id>imageio-ext-repository</id>
-					<name>imageio-ext Repository</name>
-					<url>http://maven.geo-solutions.it/</url>
-				</repository>
 				<!-- Disable Maven Central repository -->
 				<repository>
 					<id>central</id>
@@ -1325,14 +1303,6 @@
 					<snapshots>
 						<enabled>false</enabled>
 					</snapshots>
-				</repository>
-				<repository>
-					<snapshots>
-						<enabled>true</enabled>
-					</snapshots>
-					<id>imageio-ext-repository</id>
-					<name>imageio-ext Repository</name>
-					<url>http://maven.geo-solutions.it/</url>
 				</repository>
 			</repositories>
 			<pluginRepositories>
