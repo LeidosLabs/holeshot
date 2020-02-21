@@ -1020,7 +1020,7 @@
                     <configuration>
                        <rules>
                           <requireMavenVersion>
-                             <version>3.0</version>
+                             <version>${maven.version}</version>
                           </requireMavenVersion>
                        </rules>    
                     </configuration>
