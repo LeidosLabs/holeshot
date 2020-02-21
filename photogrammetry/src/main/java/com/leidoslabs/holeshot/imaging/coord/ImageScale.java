@@ -225,10 +225,9 @@ public class ImageScale {
    }
 
     /**
-     * True iff this image scale falls between the given image scales in both X and Y dimensional scaling
      * @param minScale ImageScale representing the lower bounds of the window
      * @param maxScale ImageScale representing the upper bounds of the window
-     * @return
+     * @return True if this image scale falls between the given image scales in both X and Y dimensional scaling
      */
    public boolean within(ImageScale minScale, ImageScale maxScale) {
       return scaleX >= minScale.scaleX && scaleY >= minScale.scaleY &&
