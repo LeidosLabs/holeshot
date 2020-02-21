@@ -12,7 +12,7 @@
 	<name>holeshot</name>
 
 	<prerequisites>
-		<maven>3.0.4</maven>
+		<maven>${maven.version}</maven>
 	</prerequisites>
 
 	<properties>
@@ -49,7 +49,6 @@
 		<java.version>1.8</java.version>
 		<javafx.version>2.2</javafx.version>
 		<javax-inject.version>1</javax-inject.version>
-		<mavenjavadocplugin.version>3.1.1</mavenjavadocplugin.version>
 		<javax-servlet-api.version>3.1.0</javax-servlet-api.version>
 		<jaxb2-maven-plugin.version>2.4</jaxb2-maven-plugin.version>
 		<jersey.version>2.7</jersey.version>
@@ -66,6 +65,7 @@
 		<license-maven-plugin.version>1.20</license-maven-plugin.version>
 		<log4j.version>2.11.1</log4j.version>
 		<lwjgl.version>3.2.3</lwjgl.version>
+		<maven.version>3.5.4</maven.version>
 		<maven-antrun-plugin.version>1.8</maven-antrun-plugin.version>
 		<maven-assembly-plugin.version>3.1.1</maven-assembly-plugin.version>
 		<maven-install-plugin.version>2.5.2</maven-install-plugin.version>
@@ -73,8 +73,10 @@
 		<maven.compiler.target>1.8</maven.compiler.target>
 		<maven-deploy-plugin.version>3.0.0-M1</maven-deploy-plugin.version>
 		<maven-download-plugin.version>1.2.1</maven-download-plugin.version>
+		<maven-enforcer-plugin.version>3.0.0-M3</maven-enforcer-plugin.version>
 		<maven-resources-plugin.version>2.7</maven-resources-plugin.version>
 		<mavencompilerplugin.version>3.3</mavencompilerplugin.version>
+		<mavenjavadocplugin.version>3.1.1</mavenjavadocplugin.version>
 		<mavenshadeplugin.version>3.2.1</mavenshadeplugin.version>
 		<mavensurefireplugin.version>2.20</mavensurefireplugin.version>
 		<mockito.version>2.0.2-beta</mockito.version>
@@ -997,9 +999,34 @@
 				   <artifactId>license-maven-plugin</artifactId>
 				   <version>${license-maven-plugin.version}</version>
 				</plugin>				
+ 			    <plugin>
+				   <groupId>org.sonatype.plugins</groupId>
+				   <artifactId>nexus-staging-maven-plugin</artifactId>
+				   <version>${nexus-staging-maven-plugin.version}</version>
+			    </plugin>
 			 </plugins>
 		</pluginManagement>
 		<plugins>
+            <plugin>
+              <groupId>org.apache.maven.plugins</groupId>
+              <artifactId>maven-enforcer-plugin</artifactId>
+              <version>${maven-enforcer-plugin.version}</version>
+              <executions>
+                 <execution>
+                    <id>enforce-maven</id>
+                    <goals>
+                       <goal>enforce</goal>
+                    </goals>
+                    <configuration>
+                       <rules>
+                          <requireMavenVersion>
+                             <version>3.0</version>
+                          </requireMavenVersion>
+                       </rules>    
+                    </configuration>
+                 </execution>
+              </executions>
+            </plugin>		
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>license-maven-plugin</artifactId>
@@ -1140,10 +1167,6 @@
 				</repository>
 			</repositories>
 			<pluginRepositories>
-				<!--pluginRepository> <id>central</id> <name>central</name> <url>https://central.maven.org/maven2/</url> 
-					</pluginRepository -->
-				<!--pluginRepository> <id>codice</id> <name>Codice</name> <url>http://artifacts.codice.org/content/groups/public/</url> 
-					</pluginRepository -->
 				<pluginRepository>
 					<id>springsource-release</id>
 					<name>springsource-release</name>
@@ -1207,7 +1230,7 @@
 				<pluginRepository>
 					<id>conexta-snapshots</id>
 					<name>conexta-snapshots</name>
-					<url>http://artifacts.connexta.com/content/repositories/snapshots</url>
+					<url>http://artifacts.connexta.com/content/repositories/snapshots/</url>
 				</pluginRepository>
 			</pluginRepositories>
 			<distributionManagement>
