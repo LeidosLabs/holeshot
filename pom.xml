@@ -62,7 +62,7 @@
 		<leidosimaging.version>0.0.1-SNAPSHOT</leidosimaging.version>
 		<lettuce.version>5.0.1.RELEASE</lettuce.version>
 		<license-maven-plugin.version>1.20</license-maven-plugin.version>
-		<log4j.version>2.11.1</log4j.version>
+		<log4j.version>2.13.3</log4j.version>
 		<lwjgl.version>3.2.3</lwjgl.version>
 		<maven.version>3.5.4</maven.version>
 		<maven-antrun-plugin.version>1.8</maven-antrun-plugin.version>
