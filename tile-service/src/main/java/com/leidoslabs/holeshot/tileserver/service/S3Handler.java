@@ -19,16 +19,16 @@ import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.AmazonS3Exception;
 import com.amazonaws.services.s3.model.GetObjectRequest;
+import com.amazonaws.services.s3.model.ObjectMetadata;
+import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.amazonaws.services.s3.model.S3Object;
-import com.leidoslabs.holeshot.tileserver.cache.ByteBufferCodec;
-import com.leidoslabs.holeshot.tileserver.cache.RedisCache;
+import com.amazonaws.services.s3.model.S3ObjectSummary;
+
+import com.leidoslabs.holeshot.tileserver.mrf.S3ObjectsIterator;
 import com.leidoslabs.holeshot.tileserver.service.io.ExposedByteArrayOutputStream;
 import com.leidoslabs.holeshot.tileserver.service.pool.CacheBufferPool;
 import com.leidoslabs.holeshot.tileserver.service.pool.TransferBufferPool;
 import com.leidoslabs.holeshot.tileserver.utils.ResourceUtils;
-import io.lettuce.core.RedisClient;
-import io.lettuce.core.api.StatefulRedisConnection;
-import io.lettuce.core.api.sync.RedisCommands;
 import org.apache.commons.io.IOUtils;
 import org.apache.commons.io.output.TeeOutputStream;
 import org.apache.commons.lang3.time.StopWatch;
@@ -40,41 +40,42 @@ import xyz.cloudkeeper.s3.io.S3ConnectionBuilder;
 import javax.servlet.ServletRequest;
 import javax.servlet.http.HttpServletResponse;
 import javax.ws.rs.core.Response;
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.URLConnection;
 import java.nio.ByteBuffer;
+import java.util.Iterator;
 import java.util.NoSuchElementException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
+import java.util.function.Predicate;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * Manages s3 client to handle gets, writes, copies from/to either S3 or Cache
- *
  */
-public class S3Handler {
+public class S3Handler extends AbstractTileStoreBase implements ITileStore {
    private static final XLogger logger = XLoggerFactory.getXLogger(S3Handler.class);
 
-   private final static int TRANSFER_POOL_BUFFER_SIZE_IN_BYTES = 1024 * 8;
-   private final static int MAX_CACHED_TILE_SIZE_IN_BYTES = 1000000;
-
    private final static int S3_READ_CONCURRENT_CONNECTIONS = 4;
-   private final static String SKIP_CACHE_PARAMETER="skipcache";
-   private final static String PARALLEL_S3_PARAMETER="parallelS3";
+   private final static String SKIP_CACHE_PARAMETER = "skipcache";
+   private final static String PARALLEL_S3_PARAMETER = "parallelS3";
 
-   private AmazonS3 s3Client;
+   protected AmazonS3 s3Client;
    private String bucketName;
    private TransferBufferPool transferBufferPool;
    private CacheBufferPool cacheBufferPool;
-   private TransferBufferPool cacheTransferBufferPool;
 
-   public enum WriteFrom { CACHE, S3 }
 
    /**
     * Builds S3 client and initializes buffer pools
+    *
     * @param bucket
-    * @param bucketRegion 
+    * @param bucketRegion
     * @param maxNumberOfAcceptors Max number of concurrent requests
     */
    public S3Handler(String bucket, String bucketRegion, int maxNumberOfAcceptors) {
@@ -91,6 +92,7 @@ public class S3Handler {
    /**
     * Given object key, respond with the object as a ByteArray. Gets data either from cache or S3 depending on request
     * parameters
+    *
     * @param request
     * @param wholeKey
     * @return
@@ -119,6 +121,7 @@ public class S3Handler {
 
    /**
     * Given object key, write data from either S3 (parallel or serial) or cache into out
+    *
     * @param request
     * @param wholeKey
     * @param out
@@ -143,14 +146,18 @@ public class S3Handler {
          writeFrom = WriteFrom.S3;
       }
       logger.exit();
-      
+
       return writeFrom;
    }
 
+   public void writeFromStore(String wholeKey, OutputStream out, boolean useCache) throws Exception {
+      writeFromS3(wholeKey, out, useCache);
+   }
 
    /**
-    * Get S3 object and copy to out, and add to cache if useCache. Ensures retreived objects are less than
+    * Get S3 object and copy to out, and add to cache if useCache. Ensures retrieved objects are less than
     * MAX_CACHED_TILE_SIZE_IN_BYTES
+    *
     * @param wholeKey
     * @param out
     * @param useCache
@@ -158,11 +165,11 @@ public class S3Handler {
     * @throws IllegalStateException
     * @throws Exception
     */
-   public void writeFromS3(String wholeKey, OutputStream out, boolean useCache) throws NoSuchElementException, IllegalStateException, Exception {
+   private void writeFromS3(String wholeKey, OutputStream out, boolean useCache) throws NoSuchElementException, IllegalStateException, Exception {
       logger.entry();
       ExposedByteArrayOutputStream byteStream = null;
       try (S3Object singleTileObject = s3Client.getObject(new GetObjectRequest(bucketName, wholeKey));
-            InputStream singleStream = singleTileObject.getObjectContent();) {
+           InputStream singleStream = singleTileObject.getObjectContent();) {
          long fileSize = singleTileObject.getObjectMetadata().getContentLength();
 
          if (useCache && (fileSize < MAX_CACHED_TILE_SIZE_IN_BYTES)) {
@@ -181,6 +188,7 @@ public class S3Handler {
 
    /**
     * Setup S3_READ_CONCURRENT_CONNECTIONS in parallel to S3 to write object data to out
+    *
     * @param wholeKey
     * @param out
     * @param useCache
@@ -188,7 +196,7 @@ public class S3Handler {
     * @throws IllegalStateException
     * @throws Exception
     */
-   public void writeFromS3InParallel(String wholeKey, OutputStream out, boolean useCache) throws NoSuchElementException, IllegalStateException, Exception {
+   private void writeFromS3InParallel(String wholeKey, OutputStream out, boolean useCache) throws NoSuchElementException, IllegalStateException, Exception {
       logger.entry();
       ScheduledExecutorService executorService = Executors.newScheduledThreadPool(S3_READ_CONCURRENT_CONNECTIONS);
       S3Connection s3Connection = new S3ConnectionBuilder(s3Client, executorService).setParallelConnectionsPerRequest(S3_READ_CONCURRENT_CONNECTIONS).build();
@@ -211,6 +219,7 @@ public class S3Handler {
 
    /**
     * Copy data from inputstream to output using a transfer buffer
+    *
     * @param inputStream
     * @param outputStream
     * @param byteStream
@@ -220,7 +229,7 @@ public class S3Handler {
     */
    private void copyStream(InputStream inputStream, OutputStream outputStream, ByteArrayOutputStream byteStream) throws NoSuchElementException, IllegalStateException, Exception {
       logger.entry();
-      byte[] transferBuffer=null;
+      byte[] transferBuffer = null;
       TeeOutputStream teeStream = null;
       try {
          transferBuffer = transferBufferPool.borrowObject();
@@ -231,7 +240,7 @@ public class S3Handler {
          } else {
             writeStream = teeStream = new TeeOutputStream(outputStream, byteStream);
          }
-         IOUtils.copyLarge(inputStream, writeStream , transferBuffer);
+         IOUtils.copyLarge(inputStream, writeStream, transferBuffer);
       } finally {
          ResourceUtils.returnToPoolQuietly(transferBufferPool, transferBuffer);
          ResourceUtils.closeQuietly(teeStream);
@@ -239,73 +248,96 @@ public class S3Handler {
       logger.exit();
    }
 
-   
-   /**
-    * Write to outputstream from cache using a transfer buffer, 
-    * @param wholeKey
-    * @param out
-    * @return
-    * @throws Exception
-    */
-   private boolean writeFromCache(String wholeKey, OutputStream out) throws Exception {
-      logger.entry();
-      boolean success = false;
-      ByteBuffer buffer = cacheGet(wholeKey);
-      if (buffer != null) {
-         if (buffer.hasArray()) {
-            out.write(buffer.array(), buffer.position(), buffer.remaining());
-         } else {
-            byte[] transferBuffer = null;
-            try {
-               transferBuffer = cacheTransferBufferPool.borrowObject();
-               int imageSize = buffer.remaining();
-               buffer.get(transferBuffer, 0, imageSize);
-               out.write(transferBuffer, 0, imageSize);
-            } finally {
-               cacheTransferBufferPool.returnObject(transferBuffer);
-            }
-         }
-         success = true;
-      }
-      logger.exit();
-      return success;
+   public void putObject(String objectName, ByteArrayInputStream bis, String mimeType) {
+      final ObjectMetadata metadata = new ObjectMetadata();
+      metadata.setContentType(mimeType);
+
+      final PutObjectRequest put = new PutObjectRequest(this.bucketName, objectName, bis, metadata);
+      this.s3Client.putObject(put);
+
    }
 
-
-   /**
-    * Add file to RedisCache under key
-    * @param wholeKey
-    * @param file
-    */
-   private void cacheAdd(String wholeKey, ByteBuffer file) {
-      logger.entry();
-      if (RedisCache.getInstance().isAvailable()) {
-         RedisClient client = RedisCache.getInstance().getRedis();
-         try (StatefulRedisConnection<String, ByteBuffer> connection = client.connect(new ByteBufferCodec())) {
-            RedisCommands<String, ByteBuffer> commands = connection.sync();
-            commands.set(wholeKey,  file);
-         }
-      }
-      logger.exit();
+   @Override
+   public Iterator<String> getSubFolders(String parentPath) {
+      return S3ObjectsIterator.listPrefixes(this.bucketName, parentPath, this.s3Client);
    }
-   
-   /**
-    * Retrieve object from RedisCache
-    * @param wholeKey
-    * @return
-    */
-   private ByteBuffer cacheGet(String wholeKey) {
-      logger.entry();
-      ByteBuffer value = null;
-      if (RedisCache.getInstance().isAvailable()) {
-         RedisClient client = RedisCache.getInstance().getRedis();
-         try (StatefulRedisConnection<String, ByteBuffer> connection = client.connect(new ByteBufferCodec())) {
-            RedisCommands<String, ByteBuffer> commands = connection.sync();
-            value = commands.get(wholeKey);
-         }
+
+   @Override
+   public Iterator<String> getSubFoldersByName(String parentPath, String nameContains) {
+      Predicate<String> byName = string -> string.contains(nameContains);
+
+      return S3ObjectsIterator.listPrefixes(this.bucketName, parentPath, this.s3Client).stream()
+              .filter(byName)
+              .collect(Collectors.toList()).iterator();
+   }
+
+   public Stream<String> getSubFoldersByNameAsStream(String parentPath, String nameContains) {
+      Predicate<String> byName = string -> string.contains(nameContains);
+
+      return S3ObjectsIterator.listPrefixes(this.bucketName, parentPath, this.s3Client).stream()
+              .filter(byName)
+              .collect(Collectors.toList()).stream();
+   }
+
+   @Override
+   public Iterator<String> getSubFoldersMatching(String parentPath, Pattern regExp) {
+
+      Pattern full = Pattern.compile( Pattern.quote(parentPath) + regExp);
+      Predicate<String> byName = full.asPredicate();
+
+      return S3ObjectsIterator.listPrefixes(this.bucketName, parentPath, this.s3Client).stream()
+              .filter(byName)
+              .collect(Collectors.toList()).iterator();
+   }
+
+   public Stream<String> getSubFoldersMatchingAsStream(String parentPath, Pattern regExp) {
+      Pattern full = Pattern.compile( Pattern.quote(parentPath) + regExp);
+      Predicate<String> byName = full.asPredicate();
+
+      return S3ObjectsIterator.listPrefixes(this.bucketName, parentPath, this.s3Client).stream()
+              .filter(byName)
+              .collect(Collectors.toList()).stream();
+   }
+
+   public class S3TileObject implements ITile {
+
+      private S3ObjectSummary s3ObjectSummary;
+
+      public S3TileObject(S3ObjectSummary summary) {
+         this.s3ObjectSummary = summary;
       }
-      logger.exit();
-      return value;
+
+      @Override
+      public String getKey() {
+         return s3ObjectSummary.getKey();
+      }
+
+      @Override
+      public long getSize() {
+         return s3ObjectSummary.getSize();
+      }
+   }
+
+   public ITile S3ObjToTileObject(S3ObjectSummary summary) {
+      return new S3TileObject(summary);
+   }
+
+   @Override
+   public Stream<ITile> listObjects(String folder) {
+
+      return S3ObjectsIterator.listObjects(this.bucketName, folder, this.s3Client).stream()
+              .map(this::S3ObjToTileObject)
+              .collect(Collectors.toList()).stream();
+   }
+
+   public Stream<ITile> listObjects(String folder, Pattern objectNameRegex) {
+
+      Predicate<S3ObjectSummary> byName = o -> o.getKey().matches(objectNameRegex.pattern());
+
+      return S3ObjectsIterator.listObjects(this.bucketName, folder, this.s3Client).stream()
+              .filter(byName)
+              .map(this::S3ObjToTileObject)
+              .collect(Collectors.toList()).stream();
    }
 
 }

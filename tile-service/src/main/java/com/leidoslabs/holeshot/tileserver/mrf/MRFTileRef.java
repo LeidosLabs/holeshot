@@ -18,7 +18,7 @@ package com.leidoslabs.holeshot.tileserver.mrf;
 import com.leidoslabs.holeshot.elt.tileserver.AbstractTileRef;
 
 /**
- * TileRef with object size incorportated
+ * TileRef with object size incorporated
  */
 public class MRFTileRef extends AbstractTileRef<MRFTileRef> {
 	private final long objectSize;

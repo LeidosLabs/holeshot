@@ -132,7 +132,18 @@
 			<artifactId>junit</artifactId>
 			<scope>test</scope>
 		</dependency>
-	</dependencies>
+        <dependency>
+            <groupId>com.hierynomus</groupId>
+            <artifactId>smbj</artifactId>
+            <version>0.10.0</version>
+        </dependency>
+		<dependency>
+			<groupId>io.findify</groupId>
+			<artifactId>s3mock_2.13</artifactId>
+			<version>0.2.6</version>
+			<scope>test</scope>
+		</dependency>
+    </dependencies>
 	<build>
 		<plugins>
 			<plugin>

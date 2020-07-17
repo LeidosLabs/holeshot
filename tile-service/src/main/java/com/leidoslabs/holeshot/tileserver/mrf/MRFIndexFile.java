@@ -32,8 +32,8 @@ import java.util.regex.Pattern;
 
 import com.leidoslabs.holeshot.elt.tileserver.TileRef;
 import com.leidoslabs.holeshot.elt.tileserver.TileserverImage;
-import com.leidoslabs.holeshot.tileserver.service.S3Handler;
 import com.leidoslabs.holeshot.imaging.ImageKey;
+import com.leidoslabs.holeshot.tileserver.service.ITileStore;
 
 /**
  * Populate sorted MRFTileRefs from a tileserver image of S3 image collection + timestamp prefix
@@ -46,7 +46,7 @@ public class MRFIndexFile {
 	
 	/**
 	 * Populate outputTiles from fully specified tile URL
-	 * @param s3Handler
+	 * @param storeHandler
 	 * @param region
 	 * @param bucket
 	 * @param prefix
@@ -54,26 +54,24 @@ public class MRFIndexFile {
 	 * @throws IllegalStateException
 	 * @throws Exception
 	 */
-	public MRFIndexFile(S3Handler s3Handler, String region, String bucket, String prefix) throws NoSuchElementException, IllegalStateException, Exception {
+	public MRFIndexFile(ITileStore storeHandler, String region, String bucket, String prefix) throws NoSuchElementException, IllegalStateException, Exception {
 		this();
-		crawlOffsetMap(region, bucket, prefix);
+		crawlOffsetMap(storeHandler, bucket, prefix);
 	}
 	
 	
 	/**
 	 * Using a TileserverImage's tiles, populate outputTiles
 	 * @param image
-	 * @param s3Handler
-	 * @param region
-	 * @param bucket
+	 * @param storeHandler
 	 * @param prefix
 	 * @throws NoSuchElementException
 	 * @throws IllegalStateException
 	 * @throws Exception
 	 */
-	public MRFIndexFile(TileserverImage image, S3Handler s3Handler, String region, String bucket, String prefix) throws NoSuchElementException, IllegalStateException, Exception {
+	public MRFIndexFile(TileserverImage image, ITileStore storeHandler, String prefix) throws NoSuchElementException, IllegalStateException, Exception {
 		this();
-		readIndexFile(image, s3Handler, region, bucket, prefix);
+		readIndexFile(image, storeHandler, prefix);
 	}
 
 	public MRFIndexFile() {
@@ -143,12 +141,12 @@ public class MRFIndexFile {
 
 	/**
 	 * Populate output tiles by crawling over s3 objects
-	 * @param region
+	 * @param storeHandler
 	 * @param bucket
 	 * @param prefix
 	 */
-	private void crawlOffsetMap(String region, String bucket, String prefix) {
-		ListObjectsIterator.listObjects(bucket, prefix).stream()
+	private void crawlOffsetMap(ITileStore storeHandler, String bucket, String prefix) {
+		storeHandler.listObjects(prefix)
 		.map(o->getTileRef(o.getKey(), o.getSize()))
 		.filter(t->t!=null)
 		.forEach(t->outputTiles.add(t));
@@ -158,16 +156,14 @@ public class MRFIndexFile {
 	/**
 	 * For each tile in a tileserverimage, read offset and size from index file, then add to outputTiles
 	 * @param image
-	 * @param s3Handler
-	 * @param region
-	 * @param bucket
+	 * @param storeHandler
 	 * @param prefix
 	 * @throws NoSuchElementException
 	 * @throws IllegalStateException
 	 * @throws Exception
 	 */
-	private void readIndexFile(TileserverImage image, S3Handler s3Handler, String region, String bucket, String prefix) throws NoSuchElementException, IllegalStateException, Exception {
-		final byte[] indexFileBytes = readIndexFileBytes(s3Handler, region, bucket, prefix);
+	private void readIndexFile(TileserverImage image, ITileStore storeHandler, String prefix) throws NoSuchElementException, IllegalStateException, Exception {
+		final byte[] indexFileBytes = readIndexFileBytes(storeHandler, prefix);
 
 		final TileRef topTile = image.getTopTile();
 
@@ -213,19 +209,17 @@ public class MRFIndexFile {
 
 	/**
 	 * Index file byte array from writeFromS3 call 
-	 * @param s3Handler
-	 * @param region
-	 * @param bucket
+	 * @param storeHandler
 	 * @param prefix
 	 * @return
 	 * @throws NoSuchElementException
 	 * @throws IllegalStateException
 	 * @throws Exception
 	 */
-	private byte[] readIndexFileBytes(S3Handler s3Handler, String region, String bucket, String prefix) throws NoSuchElementException, IllegalStateException, Exception {
+	private byte[] readIndexFileBytes(ITileStore storeHandler, String prefix) throws NoSuchElementException, IllegalStateException, Exception {
 		byte[] result = null;
 		try (ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
-			s3Handler.writeFromS3(prefix, bos, true);
+			storeHandler.writeFromStore(prefix, bos, true);
 			result = bos.toByteArray();
 		}
 		return result;

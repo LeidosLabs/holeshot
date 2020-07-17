@@ -128,7 +128,7 @@ public class MRFService {
       MRFIndexFile indexFile = mrfIndexCache.get(mrfIndexPrefix);
       if (indexFile == null) {
          final TileserverImage image = getImage(imageId, timestamp);
-         indexFile = new MRFIndexFile(image, s3Handler, region, bucket, mrfIndexPrefix);
+         indexFile = new MRFIndexFile(image, s3Handler, mrfIndexPrefix);
          mrfIndexCache.put(mrfIndexPrefix, indexFile);
       }
       return indexFile;
