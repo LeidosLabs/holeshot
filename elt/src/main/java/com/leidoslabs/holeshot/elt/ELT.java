@@ -636,7 +636,7 @@ public class ELT implements Runnable {
 
 	/**
 	 * Retrieves the newest ELTFrame for the given appId
-	 * @param appID The context for the last loaded image.
+	 * @param appId The context for the last loaded image.
 	 * @return The newest ELTFrame for the given appId.
 	 */
 	public ELTFrame getLastLoadedAppImage(String appId) {

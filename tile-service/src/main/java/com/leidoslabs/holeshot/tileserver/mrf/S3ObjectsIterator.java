@@ -25,7 +25,6 @@ import java.util.stream.Stream;
 import java.util.stream.StreamSupport;
 
 import com.amazonaws.services.s3.AmazonS3;
-import com.amazonaws.services.s3.AmazonS3ClientBuilder;
 import com.amazonaws.services.s3.model.ListObjectsV2Request;
 import com.amazonaws.services.s3.model.ListObjectsV2Result;
 import com.amazonaws.services.s3.model.S3ObjectSummary;
@@ -34,7 +33,7 @@ import com.amazonaws.services.s3.model.S3ObjectSummary;
  * Utility class for listing objects from s3 buckets as an iterator.
  * @param <T>
  */
-public class ListObjectsIterator <T> implements Iterator<T> {
+public class S3ObjectsIterator<T> implements Iterator<T> {
    private static final int MAX_KEYS_PER_READ=1000;
    private ListObjectsV2Result result;
    private final ListObjectsV2Request request;
@@ -47,8 +46,8 @@ public class ListObjectsIterator <T> implements Iterator<T> {
     * @param request S3 API List objects request
     * @param collectionMethod 
     */
-   public ListObjectsIterator(ListObjectsV2Request request, Function<ListObjectsV2Result, List<T>> collectionMethod ) {
-      s3Client = AmazonS3ClientBuilder.defaultClient();
+   public S3ObjectsIterator(ListObjectsV2Request request, Function<ListObjectsV2Result, List<T>> collectionMethod, AmazonS3 client ) {
+      s3Client = client;
       this.collectionMethod = collectionMethod;
       this.request = request;
       this.result = null;
@@ -69,12 +68,12 @@ public class ListObjectsIterator <T> implements Iterator<T> {
     * @param prefix
     * @return
     */
-   public static ListObjectsIterator<String> listPrefixes(String bucket, String prefix) {
-      return new ListObjectsIterator<String>(new ListObjectsV2Request()
+   public static S3ObjectsIterator<String> listPrefixes(String bucket, String prefix, AmazonS3 s3Client) {
+      return new S3ObjectsIterator<String>(new ListObjectsV2Request()
             .withBucketName(bucket)
             .withDelimiter("/")
             .withPrefix(prefix)
-            .withMaxKeys(MAX_KEYS_PER_READ), ListObjectsV2Result::getCommonPrefixes);
+            .withMaxKeys(MAX_KEYS_PER_READ), ListObjectsV2Result::getCommonPrefixes, s3Client);
    }
    
    /**
@@ -83,11 +82,11 @@ public class ListObjectsIterator <T> implements Iterator<T> {
     * @param prefix
     * @return
     */
-   public static ListObjectsIterator<S3ObjectSummary> listObjects(String bucket, String prefix) {
-      return new ListObjectsIterator<S3ObjectSummary>(new ListObjectsV2Request()
+   public static S3ObjectsIterator<S3ObjectSummary> listObjects(String bucket, String prefix, AmazonS3 s3Client) {
+      return new S3ObjectsIterator<S3ObjectSummary>(new ListObjectsV2Request()
             .withBucketName(bucket)
             .withPrefix(prefix)
-            .withMaxKeys(MAX_KEYS_PER_READ), ListObjectsV2Result::getObjectSummaries);
+            .withMaxKeys(MAX_KEYS_PER_READ), ListObjectsV2Result::getObjectSummaries, s3Client);
    }
 
    /**

@@ -21,13 +21,14 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
+import java.util.regex.Pattern;
 
 import com.amazonaws.services.s3.AmazonS3;
 import com.amazonaws.services.s3.AmazonS3ClientBuilder;
-import com.amazonaws.services.s3.model.ObjectMetadata;
-import com.amazonaws.services.s3.model.PutObjectRequest;
 import com.leidoslabs.holeshot.elt.tileserver.TileserverImage;
 import com.leidoslabs.holeshot.tileserver.service.S3Handler;
+import com.leidoslabs.holeshot.tileserver.service.ITileStore;
+import sun.misc.Regexp;
 
 /**
  * Driver class for generating .idx files for images on s3
@@ -36,19 +37,19 @@ import com.leidoslabs.holeshot.tileserver.service.S3Handler;
 public class MRFGenerator {
    private final AmazonS3 s3Client;
    private final String tileserverURL;
-   private final S3Handler s3Handler;
+   private final ITileStore storeHandler;
    
    /**
     * Initializes s3 client, and writes all objects with metadata.json to a MRFIndexFile
-    * @param s3Handler
+    * @param storeHandler
     * @param region
     * @param bucket
     * @param tileserverURL
     */
-   public MRFGenerator(S3Handler s3Handler, String region, String bucket, String tileserverURL) {
+   public MRFGenerator(ITileStore storeHandler, String region, String bucket, String tileserverURL) {
       this.s3Client = AmazonS3ClientBuilder.defaultClient();
       this.tileserverURL = tileserverURL;
-      this.s3Handler = s3Handler;
+      this.storeHandler = storeHandler;
 
       crawlBucket(region, bucket);
    }
@@ -91,33 +92,28 @@ public class MRFGenerator {
     * @param bucket
     */
    private void crawlBucket(String region, String bucket) {
-      ListObjectsIterator.listPrefixes(bucket, "").stream()
-      .flatMap(t->ListObjectsIterator.listPrefixes(bucket, t).stream())
-      .flatMap(s->ListObjectsIterator.listObjects(bucket, String.format("%smetadata.json", s)).stream())
-      .map(o->o.getKey().replaceFirst("/metadata.json", ""))
-      //.filter(p-> !ListObjectsIterator.listObjects(bucket, String.format("%s/image.idx", p)).stream().findAny().isPresent())
-      .forEach(p->writeMRFIndexFile(region, bucket, p));
+
+      storeHandler.listObjects("", Pattern.compile("[A-Z,a-z,0-9/]*metadata.json\\b"))
+      .forEach(p->writeMRFIndexFile(p.getKey( )));
    }
 
    /**
     * Write a MRFIndexFile from a IndexFile's output stream to s3 given bucket, image collection id, and timestamp (prefix)
-    * @param region
-    * @param bucket
     * @param prefix
     */
-   private void writeMRFIndexFile(String region, String bucket, String prefix) {
+   private void writeMRFIndexFile(String prefix) {
       try (ByteArrayOutputStream bos = new ByteArrayOutputStream()) {
          final TileserverImage image = getImage(prefix);
-         final MRFIndexFile mrfIndex = new MRFIndexFile(image, s3Handler, region, bucket, prefix);
+         final MRFIndexFile mrfIndex = new MRFIndexFile(image, storeHandler, prefix);
          mrfIndex.writeToOutputStream(bos);
          
          try (ByteArrayInputStream bis = new ByteArrayInputStream(bos.toByteArray())) {
-            final ObjectMetadata metadata = new ObjectMetadata();
-            metadata.setContentType("application/octet-stream");
+
             final String mrfIndexObjectname = String.format("%s/image.idx", prefix);
             System.out.println(String.format("Writing %s", mrfIndexObjectname));
-            final PutObjectRequest put = new PutObjectRequest(bucket, mrfIndexObjectname, bis, metadata);
-            s3Client.putObject(put);
+
+            storeHandler.putObject(mrfIndexObjectname, bis, "application/octet-stream");
+
          }
       } catch (Exception ioe) {
          ioe.printStackTrace();
