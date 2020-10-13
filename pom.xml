@@ -56,7 +56,7 @@
 		<json.version>20180130</json.version>
 		<jsonpath.version>2.4.0</jsonpath.version>
 		<jts.version>1.16.1</jts.version>
-		<junit.version>4.12</junit.version>
+		<junit.version>4.13.1</junit.version>
 		<jwt.version>3.8.0</jwt.version>
 		<jwks.version>0.8.1</jwks.version>
 		<leidosimaging.version>0.0.1-SNAPSHOT</leidosimaging.version>
