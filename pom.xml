@@ -51,7 +51,7 @@
 		<javax-servlet-api.version>3.1.0</javax-servlet-api.version>
 		<jaxb2-maven-plugin.version>2.4</jaxb2-maven-plugin.version>
 		<jersey.version>2.7</jersey.version>
-		<jetty.version>9.4.26.v20200117</jetty.version>
+		<jetty.version>9.4.35.v20201120</jetty.version>
 		<joml.version>1.9.8</joml.version>
 		<json.version>20180130</json.version>
 		<jsonpath.version>2.4.0</jsonpath.version>
