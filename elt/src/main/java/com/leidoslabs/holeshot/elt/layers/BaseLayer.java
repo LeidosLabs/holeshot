@@ -18,67 +18,139 @@ package com.leidoslabs.holeshot.elt.layers;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.net.URL;
+import java.util.Collection;
+import java.util.concurrent.ExecutionException;
+import java.util.function.Consumer;
 
 import org.image.common.util.CloseableUtils;
 
+import com.leidoslabs.holeshot.elt.ELTCanvas;
+import com.leidoslabs.holeshot.elt.ELTDisplayContext;
+import com.leidoslabs.holeshot.elt.ImageFramebuffer;
+import com.leidoslabs.holeshot.elt.Interpolation;
 import com.leidoslabs.holeshot.elt.imagechain.Framebuffer;
+import com.leidoslabs.holeshot.elt.imageop.ImageOpFactory;
+import com.leidoslabs.holeshot.elt.imageop.Mosaic;
+import com.leidoslabs.holeshot.elt.imageop.ToneTransferCurve;
 import com.leidoslabs.holeshot.elt.tileserver.TileserverImage;
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
+import com.leidoslabs.holeshot.elt.viewport.ViewportImageListener;
 
 /**
  * Base (Image) Layer of ELTCanvas. Uses a Renderer (typically ImageChain)
  * to render a TileServerImage
  */
-public class BaseLayer implements Closeable {
+public class BaseLayer extends Renderer<Void> implements Closeable {
+	private final Mosaic mosaic;
+	private final ImageOpFactory imageOpFactory;
+	private final boolean isProgressiveRender;
 
-    private TileserverImage image;
-    private Renderer<TileserverImage> renderer;
+	public BaseLayer(ELTCanvas eltCanvas) {
+		this(eltCanvas.getImageWorld(), eltCanvas.getELTDisplayContext(), eltCanvas.getImageOpFactory(), eltCanvas.isProgressiveRender());
+	}
+	public BaseLayer(ImageWorld imageWorld, ELTDisplayContext displayContext, ImageOpFactory imageOpFactory, boolean progressiveRender) {
+		super(imageWorld, displayContext);
+		this.imageOpFactory = imageOpFactory;
+		this.isProgressiveRender = progressiveRender;
+		this.mosaic = imageOpFactory.mosaic(imageWorld, displayContext, m->this.setFramebuffer(m.getResultFramebuffer()));
+	}
 
-    /**
-     * Constructor
-     * @param renderer TileServerImage Renderer, typically ImageChain
-     */
-    public BaseLayer(Renderer<TileserverImage> renderer) {
-       this(renderer, null);
-   }
+	public void addImage(TileserverImage tileserverImage) throws IOException, InterruptedException, ExecutionException {
+		final ImageFramebuffer imageFb = new ImageFramebuffer(imageOpFactory, getImageWorld(), getELTDisplayContext(), isProgressiveRender, tileserverImage);
+		addImage(imageFb);
+	}
+	public void addImage(URL imageMetadataURL) throws IOException, InterruptedException, ExecutionException {
+		final ImageFramebuffer imageFb = new ImageFramebuffer(imageOpFactory, getImageWorld(), getELTDisplayContext(), isProgressiveRender, imageMetadataURL);
+		addImage(imageFb);
+	}
+	private void addImage(ImageFramebuffer imageFb) {
+		mosaic.addImage(imageFb);
+	}
 
-    /**
-     * Constructor
-     * @param renderer TileServerImage Renderer, typically ImageChain
-     * @param image
-     */
-    public BaseLayer(Renderer<TileserverImage> renderer, TileserverImage image) {
-        this.renderer = renderer;
-        this.image = image;
-    }
+	public void addImages(Collection<URL> imageMetadataURLs) throws IOException, InterruptedException, ExecutionException {
+		for (URL url: imageMetadataURLs) {
+			addImage(url);
+		}
+	}
+	
+	public boolean isDRAEnabled() {
+		return mosaic.isDRAEnabled();
+	}
+	public void enableDRA(boolean enabled) {
+		mosaic.enableDRA(enabled);
+	}
+	public void resetImageChain() {
+		mosaic.reset();
+	}
+	public void setTTC(Consumer<? super ToneTransferCurve> action) {
+		mosaic.setTTC(action);
+	}
 
-    public void setImage(TileserverImage image) {
-        this.image = image;
-    }
+	/**
+	 * Render tile server image, and return output from buffer
+	 * @return FrameBuffer from rendered TileServerImage
+	 */
+	public Framebuffer draw() {
+		try {
+			render(null);
+		} catch (Exception e) {
+			e.printStackTrace();
+		}
+		return getResultFramebuffer();
+	}
 
-    /**
-     * Render tile server image, and return output from buffer
-     * @return FrameBuffer from rendered TileServerImage
-     */
-    public Framebuffer draw() {
-        try {
-            renderer.render(image);
-        } catch (
-                IOException e) {
-            e.printStackTrace();
-        }
-        return renderer.getResultFramebuffer();
-    }
+	public boolean isFullyRendered() {
+		return mosaic.isFullyRendered();
+	}
 
-   public boolean isFullyRendered() {
-      return this.renderer.isFullyRendered();
-   }
+	@Override
+	public void close() throws IOException {
+		CloseableUtils.close(mosaic);
+	}
 
-   public Renderer<TileserverImage> getRenderer() {
-      return renderer;
-   }
+	@Override
+	public void render(Void data) throws Exception {
+		mosaic.render();
+	}
 
-   @Override
-   public void close() throws IOException {
-      CloseableUtils.close(renderer);
-   }
+	public TileserverImage[] getImages() {
+		return mosaic.getImages();
+	}
+
+	public void addViewportImageListener(ViewportImageListener imageListener) {
+		mosaic.addViewportImageListener(imageListener);
+	}
+
+	public void setMultiImageMode() {
+		mosaic.setMultiImageMode();
+	}
+	public void setSingleImageMode(TileserverImage singleImage) {
+		mosaic.setSingleImageMode(singleImage);
+	}
+	public Interpolation getInterpolation() {
+		return mosaic.getInterpolation();
+	}
+	public void setInterpolation(Interpolation interpolation) {
+		mosaic.setInterpolation(interpolation);
+	}
+	/**
+	 * 
+	 */
+	public void clearAllImages() {
+		mosaic.clearAllImages();
+	}
+	/**
+	 * 
+	 */
+	public void resetFullyRendered() {
+	   mosaic.resetFullyRendered();
+	}
+	/**
+	 * @param framebuffer
+	 */
+	public void setSourceFramebuffer(Framebuffer framebuffer) {
+		mosaic.setResultFramebuffer(framebuffer);
+	}
+	
 }

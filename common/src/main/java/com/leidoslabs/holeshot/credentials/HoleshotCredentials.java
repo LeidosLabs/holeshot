@@ -32,14 +32,14 @@ public class HoleshotCredentials {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(HoleshotCredentials.class);
 
-  public static final String LEIDOS_SDK_SECRET_ACCESS_KEY = "leidos_sdk_secret_access_key";
-  public static final String LEIDOS_SDK_SETTINGS_FILE = ".leidos-sdk" + File.separator + "credentials";
+  public static final String HOLESHOT_TILESERVICE_KEY = "holeshot_tileservice_key";
+  public static final String HOLESHOT_SDK_SETTINGS_FILE = ".holeshot" + File.separator + "holeshot.properties";
 
   private Properties properties;
   private static HoleshotCredentials applicationDefault = null;
 
   public String getSecretAccessKey() {
-    return properties.getProperty(LEIDOS_SDK_SECRET_ACCESS_KEY);
+    return properties.getProperty(HOLESHOT_TILESERVICE_KEY);
   }
 
   protected HoleshotCredentials(Properties properties) {
@@ -62,14 +62,14 @@ public class HoleshotCredentials {
        Properties properties = new Properties();
 
        File propertiesFile = new File(System.getProperty("user.home") + File.separator +
-             LEIDOS_SDK_SETTINGS_FILE);
+               HOLESHOT_SDK_SETTINGS_FILE);
 
-       String secretKey = StringUtils.defaultIfEmpty(System.getenv(LEIDOS_SDK_SECRET_ACCESS_KEY.toUpperCase()), "").trim();
+       String secretKey = StringUtils.defaultIfEmpty(System.getenv(HOLESHOT_TILESERVICE_KEY.toUpperCase()), "").trim();
        if (!secretKey.isEmpty()) {
           LOGGER.info("Using SDK Credentials taken from environment {}",
-                LEIDOS_SDK_SECRET_ACCESS_KEY.toUpperCase());
+                HOLESHOT_TILESERVICE_KEY.toUpperCase());
 
-          properties.put(LEIDOS_SDK_SECRET_ACCESS_KEY, secretKey);
+          properties.put(HOLESHOT_TILESERVICE_KEY, secretKey);
        } else if (propertiesFile.exists()) {
           LOGGER.info("Using SDK credentials taken from configuration file {}", propertiesFile.toString());
           try {
@@ -95,7 +95,7 @@ public class HoleshotCredentials {
    */
   public static HoleshotCredentials forRegisteredUser(String secretKey) {
     Properties properties = new Properties();
-    properties.setProperty(LEIDOS_SDK_SECRET_ACCESS_KEY, secretKey);
+    properties.setProperty(HOLESHOT_TILESERVICE_KEY, secretKey);
     return new HoleshotCredentials(properties);
   }
 

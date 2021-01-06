@@ -29,66 +29,76 @@ import org.slf4j.LoggerFactory;
  * Executor that ensures that a given ELT task is performed in the appropriate context
  */
 public class ELTDisplayExecutor {
-   private static final Logger LOGGER = LoggerFactory.getLogger(ELTDisplayExecutor.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(ELTDisplayExecutor.class);
 
-   public enum ExecMode { ASYNCHRONOUS, SYNCHRONOUS };
+	public enum ExecMode { ASYNCHRONOUS, SYNCHRONOUS };
 
-   private ExecutorService executor;
-   private final AtomicInteger tasksOutstanding;
-   private final ELTDisplayContext displayContext;
+	private ExecutorService executor;
+	private final AtomicInteger tasksOutstanding;
 
-   /**
-    * Construct ELTDisplayExecutor given a displayContext, and set executor to have 
-    * a thread pool with 1 thread
-    * @param displayContext
-    */
-   public ELTDisplayExecutor(ELTDisplayContext displayContext) {
-      this.displayContext = displayContext;
-      this.tasksOutstanding = new AtomicInteger(0);
-      executor = Executors.newFixedThreadPool(1);
-   }
+	private static final ELTDisplayExecutor instance = new ELTDisplayExecutor();
 
-   public void shutdown() {
-      executor.shutdown();
-   }
+	private class Job implements Runnable {
+		private final ELTDisplayContext context;
+		private final Runnable runnable;
 
-   private void runNow(Runnable runnable) throws InterruptedException, ExecutionException {
-      try {
-         if (displayContext.setContextThread()) {
-            displayContext.syncExec(runnable);
-         } else {
-            runnable.run();
-         }
-      } finally {
-         tasksOutstanding.decrementAndGet();
-      }
-   }
+		public Job(ELTDisplayContext context, Runnable runnable) {
+			this.context = context;
+			this.runnable = runnable;
+		}
 
-   /**
-    * Submit task, either await for completion or don't. 
-    * @param execMode Wait for completion (ExecMode.SYNCHRONOUS) or don't (ExecMode.ASYNCHRONOUS)
-    * @param runnable
-    * @throws InterruptedException
-    * @throws ExecutionException
-    */
-   public void submit(ExecMode execMode, Runnable runnable) throws InterruptedException, ExecutionException {
-      if (executor.isShutdown()) {
-         LOGGER.warn("Task submitted after shutdown. Discarding task", new Throwable());
-      } else {
-         tasksOutstanding.incrementAndGet();
-         Future<?> future = executor.submit(() -> {
-            try {
-               runNow(runnable);
-            } catch (InterruptedException | ExecutionException e) {
-               e.printStackTrace();
-            }
-         });
+		@Override
+		public void run() {
+			try {
+				context.syncExec(()-> {
+					context.setContextThread();
+					runnable.run();
 
-         if (execMode == ExecMode.SYNCHRONOUS) {
-            future.get();
-         }
-      }
-   }
+				});
+			} catch (InterruptedException | ExecutionException e) {
+				e.printStackTrace();
+			} finally {
+				tasksOutstanding.decrementAndGet();
+			}
+		}
+	}
+
+	public static ELTDisplayExecutor getInstance() {
+		return instance;
+	}
+
+	/**
+	 * Construct ELTDisplayExecutor given a displayContext, and set executor to have 
+	 * a thread pool with 1 thread
+	 */
+	private ELTDisplayExecutor() {
+		this.tasksOutstanding = new AtomicInteger(0);
+		executor = Executors.newFixedThreadPool(1);
+	}
+
+	public void shutdown() {
+		executor.shutdown();
+	}
+
+	/**
+	 * Submit task, either await for completion or don't. 
+	 * @param execMode Wait for completion (ExecMode.SYNCHRONOUS) or don't (ExecMode.ASYNCHRONOUS)
+	 * @param runnable
+	 * @throws InterruptedException
+	 * @throws ExecutionException
+	 */
+	public void submit(ExecMode execMode, ELTDisplayContext context, Runnable runnable) throws InterruptedException, ExecutionException {
+		if (executor.isShutdown()) {
+			LOGGER.warn("Task submitted after shutdown. Discarding task", new Throwable());
+		} else {
+			tasksOutstanding.incrementAndGet();
+			Future<?> future = executor.submit(new Job(context, runnable));
+
+			if (execMode == ExecMode.SYNCHRONOUS) {
+				future.get();
+			}
+		}
+	}
 
 
 

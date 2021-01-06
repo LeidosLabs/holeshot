@@ -45,6 +45,8 @@ import javax.imageio.ImageIO;
 
 import org.image.common.util.CloseableUtils;
 import org.lwjgl.BufferUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.leidoslabs.holeshot.elt.gpuimage.GLInternalFormat;
 import com.leidoslabs.holeshot.elt.gpuimage.HistogramType;
@@ -55,224 +57,223 @@ import com.leidoslabs.holeshot.elt.imageop.CumulativeHistogram;
 import com.leidoslabs.holeshot.elt.imageop.DRAParameters;
 import com.leidoslabs.holeshot.elt.imageop.DynamicRangeAdjust;
 import com.leidoslabs.holeshot.elt.imageop.Histogram;
-import com.leidoslabs.holeshot.elt.imageop.RawImage;
+import com.leidoslabs.holeshot.elt.imageop.ImageOp;
+import com.leidoslabs.holeshot.elt.imageop.Interpolated;
 
 /**
  * OpenGL DRA operation. Penultimate image operation in the Image Chain
  */
-class OglDynamicRangeAdjust extends OglAbstractImageOp implements DynamicRangeAdjust {
-   private DRAParameters draParameters;
-   private ShaderProgram shader;
-   private float[] equalizedImage;
-   private FloatBuffer equalizedImageBuffer;
-   private Framebuffer equalizedImageFramebuffer;
-   private ImageChainSettings imageChainSettings;
-   private CumulativeHistogram cumulativeHistogram;
+class OglDynamicRangeAdjust extends OglAbstractImageOpPrimitive implements DynamicRangeAdjust {
+	private static final Logger LOGGER = LoggerFactory.getLogger(OglDynamicRangeAdjust.class);
+	private DRAParameters draParameters;
+	private static final String SHADER_KEY = OglDynamicRangeAdjust.class.getName();
+	private float[] equalizedImage;
+	private FloatBuffer equalizedImageBuffer;
+	private Framebuffer equalizedImageFramebuffer;
+	private ImageChainSettings imageChainSettings;
+	private CumulativeHistogram cumulativeHistogram;
 
-   private Histogram histogram;
+	private Histogram histogram;
 
-   private QuadDrawVAO quadDrawVAO;
+	private QuadDrawVAO quadDrawVAO;
 
-   private RawImage rawImage;
+	private ImageOp interpolatedImage;
+	
+	public OglDynamicRangeAdjust() {
+	}
 
-   public OglDynamicRangeAdjust() {
-   }
+	@Override
+	public Framebuffer getResultFramebuffer() {
+		return this.equalizedImageFramebuffer;
+	}
 
-   @Override
-   public Framebuffer getResultFramebuffer() {
-      return this.equalizedImageFramebuffer;
-   }
+	@Override
+	protected void doRender() throws Exception {
+		try {
+			// this.dumpGLError("ENTER DRA");
+			initialize();
 
-   @Override
-   protected void doRender() throws IOException {
-      try {
-         // this.dumpGLError("ENTER DRA");
-         initialize();
+			final Histogram histogram = getHistogram();
 
-         final Histogram histogram = getHistogram();
-         final Rectangle histogramRect = histogram.getResultFramebuffer().getRectangle();
-         final double percentVisible = getImageWorld().getPercentVisible();
-         equalizedImageFramebuffer.clearBuffer();
+			if (histogram != null && histogram.getResultFramebuffer() != null) { 
+				final Rectangle histogramRect = histogram.getResultFramebuffer().getRectangle();
+				final double percentVisible = getImageWorld().getPercentVisible(this.getImage());
+				equalizedImageFramebuffer.clearBuffer();
 
-         // Bind to the Equalized Image Buffer for Writing
-         equalizedImageFramebuffer.bind();
+				// Bind to the Equalized Image Buffer for Writing
+				equalizedImageFramebuffer.bind();
 
-         glEnable(GL_ALPHA_TEST);
+				glEnable(GL_ALPHA_TEST);
 
-         //glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
-         glViewport(0, 0,  getWidth(), getHeight());
+				//glTexEnvi(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+				glViewport(0, 0,  getWidth(), getHeight());
 
-         final RawImage rawImage = getRawImage();
+				glActiveTexture(GL_TEXTURE1);
+				glBindTexture(GL_TEXTURE_2D, getInterpolatedImage().getResultFramebuffer().getTexture().getId());
+				glActiveTexture(GL_TEXTURE0);
 
-         glActiveTexture(GL_TEXTURE1);
-         glBindTexture(GL_TEXTURE_2D, rawImage.getResultFramebuffer().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
+				glActiveTexture(GL_TEXTURE2);
+				glBindTexture(GL_TEXTURE_2D, cumulativeHistogram.getResultFramebuffer().getTexture().getId());
+				glActiveTexture(GL_TEXTURE0);
 
-         glActiveTexture(GL_TEXTURE2);
-         glBindTexture(GL_TEXTURE_2D, cumulativeHistogram.getResultFramebuffer().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
+				glActiveTexture(GL_TEXTURE3);
+				glBindTexture(GL_TEXTURE_2D, draParameters.getEFirstFramebuffer().getDestination().getTexture().getId());
+				glActiveTexture(GL_TEXTURE0);
 
-         glActiveTexture(GL_TEXTURE3);
-         glBindTexture(GL_TEXTURE_2D, draParameters.getEFirstFramebuffer().getDestination().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
+				glActiveTexture(GL_TEXTURE4);
+				glBindTexture(GL_TEXTURE_2D, draParameters.getEMinFramebuffer().getDestination().getTexture().getId());
+				glActiveTexture(GL_TEXTURE0);
 
-         glActiveTexture(GL_TEXTURE4);
-         glBindTexture(GL_TEXTURE_2D, draParameters.getEMinFramebuffer().getDestination().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
+				glActiveTexture(GL_TEXTURE5);
+				glBindTexture(GL_TEXTURE_2D, draParameters.getEMaxFramebuffer().getDestination().getTexture().getId());
+				glActiveTexture(GL_TEXTURE0);
 
-         glActiveTexture(GL_TEXTURE5);
-         glBindTexture(GL_TEXTURE_2D, draParameters.getEMaxFramebuffer().getDestination().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
+				glActiveTexture(GL_TEXTURE6);
+				glBindTexture(GL_TEXTURE_2D, draParameters.getELastFramebuffer().getDestination().getTexture().getId());
+				glActiveTexture(GL_TEXTURE0);
 
-         glActiveTexture(GL_TEXTURE6);
-         glBindTexture(GL_TEXTURE_2D, draParameters.getELastFramebuffer().getDestination().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
+				ShaderProgram shader = getELTDisplayContext().getShader(SHADER_KEY, HistogramType.class, HistogramType.Shaders.PASSTHROUGH_VERTEX_SHADER, HistogramType.Shaders.EQUALIZATION_SHADER);
 
-         shader.useProgram();
+				shader.useProgram();
 
-         // Set the texture that the vertex shader should read from
-         glUniform1i(shader.getUniformLocation("rawImage"), 1);
-         glUniform1i(shader.getUniformLocation("cumulativeHistogram"), 2);
-         glUniform1i(shader.getUniformLocation("eFirstTexture"), 3);
-         glUniform1i(shader.getUniformLocation("eMinTexture"), 4);
-         glUniform1i(shader.getUniformLocation("eMaxTexture"), 5);
-         glUniform1i(shader.getUniformLocation("eLastTexture"), 6);
-         glUniform2iv(shader.getUniformLocation("fbDim"), new int[] { getWidth(), getHeight() });
-         glUniform2iv(shader.getUniformLocation("histFBDim"), new int[] { histogramRect.width, histogramRect.height});
+				// Set the texture that the vertex shader should read from
+				glUniform1i(shader.getUniformLocation("rawImage"), 1);
+				glUniform1i(shader.getUniformLocation("cumulativeHistogram"), 2);
+				glUniform1i(shader.getUniformLocation("eFirstTexture"), 3);
+				glUniform1i(shader.getUniformLocation("eMinTexture"), 4);
+				glUniform1i(shader.getUniformLocation("eMaxTexture"), 5);
+				glUniform1i(shader.getUniformLocation("eLastTexture"), 6);
+				glUniform2iv(shader.getUniformLocation("fbDim"), new int[] { getWidth(), getHeight() });
+				glUniform2iv(shader.getUniformLocation("histFBDim"), new int[] { histogramRect.width, histogramRect.height});
 
-         glUniform1f(shader.getUniformLocation("visibleImageArea"), (float)(percentVisible * getWidth() * getHeight()));
-         glUniform1i(shader.getUniformLocation("histogramDownsampling"), histogram.getDownsamplingFactor());
+				glUniform1f(shader.getUniformLocation("visibleImageArea"), (float)(percentVisible * getWidth() * getHeight()));
+				glUniform1i(shader.getUniformLocation("histogramDownsampling"), histogram.getDownsamplingFactor());
 
-         glUniform1i(shader.getUniformLocation("buckets"), histogram.getBuckets());
-         glUniform1i(shader.getUniformLocation("maxPixel"), getImage().getMaxPixelValue());
+				glUniform1i(shader.getUniformLocation("buckets"), histogram.getBuckets());
+				glUniform1i(shader.getUniformLocation("maxPixel"), getImage().getMaxPixelValue());
 
-         glUniform1f(shader.getUniformLocation("ic_a"), imageChainSettings.getA());
-         glUniform1f(shader.getUniformLocation("ic_b"), imageChainSettings.getB());
+				glUniform1f(shader.getUniformLocation("ic_a"), imageChainSettings.getA());
+				glUniform1f(shader.getUniformLocation("ic_b"), imageChainSettings.getB());
 
-         this.quadDrawVAO.draw();
+				this.quadDrawVAO.draw();
 
-         glUseProgram(0);
+				glUseProgram(0);
 
 
-         //dumpImage();
+				if (OglHistogram.DEBUG) {
+					readEqualizedImage();
 
-         if (OglHistogram.DEBUG) {
-            readEqualizedImage();
+					// Dump the histogram to STDOUT for debugging purposes
+					dumpEqualizedImage(false);
+				}
+			}
+		} finally {
+			// Cleanup State
+			equalizedImageFramebuffer.unbind();
+		}
 
-            // Dump the histogram to STDOUT for debugging purposes
-            dumpEqualizedImage(false);
-         }
+	}
+	private void dumpEqualizedImage(boolean ignoreZeros) {
+		OglHistogram.dump3DArray(equalizedImage, ignoreZeros, "EQUALIZED", -1);
+	}
+	private DRAParameters getDRAParameters() {
+		if (draParameters == null) {
+			draParameters = this.getImageChain().getPreviousImageOp(this, DRAParameters.class);
+		}
+		return draParameters;
+	}
+	private int getHeight() {
+		return getSize().height;
+	}
 
-         // dumpGLError("EXIT DRA");
+	private CumulativeHistogram getCumulativeHistogram() {
+		if (cumulativeHistogram == null) {
+			cumulativeHistogram = this.getImageChain().getPreviousImageOp(this, CumulativeHistogram.class);
+		}
+		return cumulativeHistogram;
+	}
 
-      } finally {
-         // Cleanup State
-         equalizedImageFramebuffer.unbind();
-      }
+	private Histogram getHistogram() {
+		if (histogram == null) {
+			histogram = this.getImageChain().getPreviousImageOp(this, Histogram.class);
+		}
+		return histogram;
+	}
+	private ImageOp getInterpolatedImage() {
+		if (interpolatedImage == null) {
+			interpolatedImage = this.getImageChain().getPreviousImageOp(this, Interpolated.class);
+		}
+		return interpolatedImage;
+	}
 
-   }
-   private void dumpEqualizedImage(boolean ignoreZeros) {
-      OglHistogram.dump3DArray(equalizedImage, ignoreZeros, "EQUALIZED", -1);
-   }
-   private DRAParameters getDRAParameters() {
-      if (draParameters == null) {
-         draParameters = this.getImageChain().getPreviousImageOp(this, DRAParameters.class);
-      }
-      return draParameters;
-   }
-   private int getHeight() {
-      return getSize().height;
-   }
+	private Dimension getSize() {
+		return equalizedImageFramebuffer.getSize();
+	}
+	private int getWidth() {
+		return getSize().width;
+	}	
 
-   private CumulativeHistogram getCumulativeHistogram() {
-      if (cumulativeHistogram == null) {
-         cumulativeHistogram = this.getImageChain().getPreviousImageOp(this, CumulativeHistogram.class);
-      }
-      return cumulativeHistogram;
-   }
+	private void initialize() throws Exception {
+		final Dimension viewportDimensions = getViewportDimensions();
+		if (equalizedImageFramebuffer == null) {
+			cumulativeHistogram = getCumulativeHistogram();
+			draParameters = getDRAParameters();
+			equalizedImageFramebuffer = new Framebuffer(viewportDimensions, GLInternalFormat.GlInternalFormatRGBA32F, getELTDisplayContext());
+			this.quadDrawVAO = new QuadDrawVAO(QuadDrawVAO.FULL_UNIFORM_QUAD, 0);
+		} else if (!equalizedImageFramebuffer.getSize().equals(viewportDimensions)) {
+			equalizedImageFramebuffer.reset(viewportDimensions);
+		}
+		imageChainSettings = getImageSource().getSettings();
+	}
+	private void readEqualizedImage() {
+		final int imageBands = 3; // getImage().getNumBands();
+		if (equalizedImage == null || equalizedImage.length != getWidth() * getHeight() * imageBands) {
+			this.equalizedImage = new float[getWidth() * getHeight() * imageBands];
+			this.equalizedImageBuffer = BufferUtils.createFloatBuffer(equalizedImage.length);
+		}
+		equalizedImageFramebuffer.readFramebuffer(equalizedImageBuffer, equalizedImage);
+	}
 
-   private Histogram getHistogram() {
-      if (histogram == null) {
-         histogram = this.getImageChain().getPreviousImageOp(this, Histogram.class);
-      }
-      return histogram;
-   }
-   private RawImage getRawImage() {
-      if (rawImage == null) {
-         return this.getImageChain().getPreviousImageOp(this, RawImage.class);
-      }
-      return rawImage;
-   }
+	boolean first = true;
+	private void dumpImage() {
+		if (first) {
+			try {
+				first = false;
+				readEqualizedImage();
+				equalizedImageBuffer.rewind();
 
-   private Dimension getSize() {
-      return equalizedImageFramebuffer.getSize();
-   }
-   private int getWidth() {
-      return getSize().width;
-   }
+				final int width = getWidth();
+				final int height = getHeight();
+				BufferedImage image = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_RGB);
+				int[] rgbArray = new int[width*height];
+				final int maxPixel = 256; // (int)Math.pow(2, 16);
+				for(int y = 0; y < height; ++y) {
+					for(int x = 0; x < width; ++x) {
+						int r = (int)(equalizedImageBuffer.get() * maxPixel) << 16;
+						int g = (int)(equalizedImageBuffer.get() * maxPixel) << 8;
+						int b = (int)(equalizedImageBuffer.get() * maxPixel);
+						int i = ((height - 1) - y) * width + x;
+						rgbArray[i] = r + g + b;
+					}
+				}
 
-   private void initialize() throws IOException {
-      final Dimension viewportDimensions = getViewportDimensions();
-      if (equalizedImageFramebuffer == null) {
-         cumulativeHistogram = getCumulativeHistogram();
-         draParameters = getDRAParameters();
-         equalizedImageFramebuffer = new Framebuffer(viewportDimensions, GLInternalFormat.GlInternalFormatRGBA32F, getELTDisplayContext());
-         this.shader = new ShaderProgram(HistogramType.class, HistogramType.Shaders.PASSTHROUGH_VERTEX_SHADER, HistogramType.Shaders.EQUALIZATION_SHADER);
-         this.quadDrawVAO = new QuadDrawVAO(QuadDrawVAO.FULL_UNIFORM_QUAD, 0);
-      } else if (!equalizedImageFramebuffer.getSize().equals(viewportDimensions)) {
-         equalizedImageFramebuffer.reset(viewportDimensions);
-      }
-      imageChainSettings = getImageSource().getSettings();
-   }
-   private void readEqualizedImage() {
-      final int imageBands = 3; // getImage().getNumBands();
-      if (equalizedImage == null || equalizedImage.length != getWidth() * getHeight() * imageBands) {
-         this.equalizedImage = new float[getWidth() * getHeight() * imageBands];
-         this.equalizedImageBuffer = BufferUtils.createFloatBuffer(equalizedImage.length);
-      }
-      equalizedImageFramebuffer.readFramebuffer(equalizedImageBuffer, equalizedImage);
-   }
+				image.setRGB(0,0,getWidth(), getHeight(), rgbArray, 0, getWidth());
+				ImageIO.write(image, "png", new File("F:/fooEqualized.png"));
+			} catch (IOException e) {
+				e.printStackTrace();
+			}
 
-   boolean first = true;
-   private void dumpImage() {
-      if (first) {
-         try {
-            first = false;
-            readEqualizedImage();
-            equalizedImageBuffer.rewind();
+		}
+	}
+	@Override
+	public void close() throws IOException {
+		super.close();
+		CloseableUtils.close(equalizedImageFramebuffer, quadDrawVAO);
+	}
 
-            final int width = getWidth();
-            final int height = getHeight();
-            BufferedImage image = new BufferedImage(getWidth(), getHeight(), BufferedImage.TYPE_INT_RGB);
-            int[] rgbArray = new int[width*height];
-            final int maxPixel = 256; // (int)Math.pow(2, 16);
-            for(int y = 0; y < height; ++y) {
-               for(int x = 0; x < width; ++x) {
-                  int r = (int)(equalizedImageBuffer.get() * maxPixel) << 16;
-                  int g = (int)(equalizedImageBuffer.get() * maxPixel) << 8;
-                  int b = (int)(equalizedImageBuffer.get() * maxPixel);
-                  int i = ((height - 1) - y) * width + x;
-                  rgbArray[i] = r + g + b;
-               }
-            }
-
-            image.setRGB(0,0,getWidth(), getHeight(), rgbArray, 0, getWidth());
-            ImageIO.write(image, "png", new File("F:/fooEqualized.png"));
-         } catch (IOException e) {
-            e.printStackTrace();
-         }
-
-      }
-   }
-   @Override
-   public void close() throws IOException {
-      super.close();
-      CloseableUtils.close(shader, equalizedImageFramebuffer, quadDrawVAO);
-   }
-
-   @Override
-   public void reset() {
-      clearFramebuffer(0.0f, 0.0f, 0.0f, 1.0f, equalizedImageFramebuffer);
-   }
+	@Override
+	public void reset() {
+		clearFramebuffer(0.0f, 0.0f, 0.0f, 1.0f, equalizedImageFramebuffer);
+	}
 
 }

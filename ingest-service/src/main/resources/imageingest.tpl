@@ -19,10 +19,10 @@ EXEC="/usr/bin/jsvc"
 FILE_PATH="/usr/share/$NAME"
 
 # The path to the folder containing the java runtime
-JAVA_HOME="/usr/lib/jvm/jre"
+JAVA_HOME="/usr/lib/jvm/java-1.8.0-openjdk.x86_64"
 
 # Our classpath including our jar
-CLASS_PATH="$FILE_PATH/bin/image-ingest-service.jar"
+CLASS_PATH="$FILE_PATH/bin/ingest-service.jar"
 
 # The fully qualified name of the class to execute
 CLASS="com.leidoslabs.holeshot.ingest.SQSEventMonitorDaemon"
@@ -54,7 +54,7 @@ jsvc_exec()
 case "$1" in
     start)
         echo "Starting the $DESC..."
-
+        export LD_LIBRARY_PATH=/usr/share/imageingest/kak-build-libs
         # Start the service
         jsvc_exec
 
@@ -81,6 +81,7 @@ case "$1" in
             jsvc_exec "-stop"
 
             # Start the service
+            export LD_LIBRARY_PATH=/usr/share/imageingest/kak-build-libs
             jsvc_exec
 
             echo "The $DESC has restarted."

@@ -218,3 +218,7 @@ $RECYCLE.BIN/
 
 # End of https://www.gitignore.io/api/maven,java,intellij,eclipse,netbeans,osx,linux,windows
 
+#Ignore proprietary libs in ingest service if present
+ingest-service/src/main/resources/jp2k-libs/
+
+elt/offline_cache.old/

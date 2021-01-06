@@ -104,9 +104,9 @@ public class DataLayer implements Closeable {
    }
 
    /**
-    * Draws rendered data layer ontop of given FrameBuffer
+    * Draws rendered data layer on top of given FrameBuffer
     * @param fb
-    * @return resultant frame buffer, after drawing ontop of supplied FrameBuffer
+    * @return resultant frame buffer, after drawing on top of supplied FrameBuffer
     */
    public synchronized Framebuffer draw(Framebuffer fb) {
       Framebuffer result = fb;
@@ -116,7 +116,7 @@ public class DataLayer implements Closeable {
          try {
             renderer.render(data);
             result = renderer.getResultFramebuffer();
-         } catch (IOException e) {
+         } catch (Exception e) {
             e.printStackTrace();
          }
       }

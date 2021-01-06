@@ -1,19 +1,35 @@
+/*
+ * Licensed to Leidos, Inc. under one or more contributor license agreements.
+ * See the NOTICE file distributed with this work for additional information regarding copyright ownership.
+ * Leidos, Inc. licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.leidoslabs.holeshot.imaging.metadata;
+
+import java.util.Date;
+
+import org.image.common.geojson.GeoJsonModule;
+import org.junit.Before;
+import org.junit.Test;
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.GeometryFactory;
 
 import com.fasterxml.jackson.core.Version;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.databind.module.SimpleModule;
-import com.leidoslabs.holeshot.imaging.nitf.ImageSegmentMetadataSerializer;
-import org.image.common.geojson.GeoJsonModule;
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.GeometryFactory;
-
-import org.codice.imaging.nitf.core.image.ImageSegment;
-import org.junit.Before;
-import org.junit.Test;
-
-import java.util.Date;
+import com.leidoslabs.holeshot.imaging.nitf.RenderedImageSegment;
+import com.leidoslabs.holeshot.imaging.nitf.RenderedImageSegmentMetadataSerializer;
 
 public class TilePyramidDescriptorTest {
 
@@ -26,7 +42,7 @@ public class TilePyramidDescriptorTest {
   public void setup() {
     SimpleModule nitfMetadataModule =
         new SimpleModule("NITFMetadataModule", new Version(1, 0, 0, null));
-    nitfMetadataModule.addSerializer(ImageSegment.class,new ImageSegmentMetadataSerializer());
+    nitfMetadataModule.addSerializer(RenderedImageSegment.class, new RenderedImageSegmentMetadataSerializer());
 
     mapper = new ObjectMapper();
     mapper.enable(SerializationFeature.INDENT_OUTPUT);

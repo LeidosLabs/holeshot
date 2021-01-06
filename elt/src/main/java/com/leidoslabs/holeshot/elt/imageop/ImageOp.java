@@ -16,26 +16,25 @@
 
 package com.leidoslabs.holeshot.elt.imageop;
 
+import java.awt.Dimension;
 import java.io.Closeable;
-import java.io.IOException;
 
 import com.leidoslabs.holeshot.elt.imagechain.Framebuffer;
-import com.leidoslabs.holeshot.elt.imagechain.ImageChain;
 
 /**
  * Basic interface for opengl image operations along an image chain.
  * Typically, the render method will execute a shader program 
  */
 public interface ImageOp extends Closeable {
-  public void render() throws IOException;
+  public void render() throws Exception;
   public Framebuffer getResultFramebuffer();
-
-  public void setImageChain(ImageChain imageChain);
-
   public boolean isFullyRendered();
 
   public void setRenderingEnabled(boolean performingDRA);
   public boolean isRenderingEnabled();
   public void reset();
+  public void resetFullyRendered();
+  
+  public Dimension getViewportDimensions();
 
 }

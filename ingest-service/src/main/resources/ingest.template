@@ -1,8 +1,15 @@
 {
   "AWSTemplateFormatVersion" : "2010-09-09",
-
   "Description" : "Auto-Scaling GEOINT Ingest Services",
-
+  "Outputs": {
+    "MetadataTopicArn": {
+      "Description": "The arn of the metadata sns topic.",
+      "Value": {"Ref": "MetadataTopic" },
+      "Export": {
+        "Name": { "Fn::Join": [":", [{"Ref": "StackSuffix"}, "MetadataTopicArn"]]}
+      }
+    }
+  },
   "Parameters" : {
     "DeploymentArtifactsBucketName": {
       "Description": "Name of S3 bucket that will contain the deployable artifacts and configurations needed by this template.",
@@ -10,46 +17,58 @@
       "Default": "advanced-analytics-deployment",
       "ConstraintDescription": "must be the name of an existing S3 bucket containing the deployable CSCIs and configuration files"
     },
-
+    "RawImagesBucketName": {
+      "Description": "Name of S3 bucket that will contain the raw images.",
+      "Type": "String",
+      "Default": "advanced-analytics-geo-raw-images"
+    },
     "TileBucketName": {
       "Description": "Name of S3 bucket that will contain the output image tiles.",
       "Type": "String",
-      "Default": "advanced-analytics-geo-tile-images",
-      "ConstraintDescription": "must be the name of an existing S3 bucket that will receive the output tiles"
+      "Default": "advanced-analytics-geo-tile-images"
     },
-
+    "CreateRawImagesBucket": {
+      "Description": "Flag to indicate if bucket needs to be created.",
+      "Type": "String",
+      "Default": "true"
+    },
+    "CreateTileImagesBucket": {
+      "Description": "Flag to indicate if bucket needs to be created.",
+      "Type": "String",
+      "Default": "true"
+    },
+    "CreateImageMetadataTopic": {
+      "Description": "Flag to indicate if topic needs to be created.",
+      "Type": "String",
+      "Default": "true"
+    },
     "MetadataTopicName": {
       "Description": "Name of SNS Topic that will receive the output image metadata.",
       "Type": "String",
       "Default": "advanced-analytics-image-metadata",
       "ConstraintDescription": "should be the name of the output metadata table, if it does not exist it will be created by the process"
     },
-
     "NewDataItemSNSTopic" : {
       "Type" : "String",
       "Description" : "The ARN of the SNS topic receiving notifications of data to ingest.",
-      "Default" : "arn:aws:sns:us-east-1:199974664221:advanced-analytics-image-ingest"
+      "Default" : "arn:aws:sns:us-east-1:555555555555:advanced-analytics-image-ingest"
     },
-
     "VpcId" : {
       "Type" : "String",
       "Description" : "The ID of the VPC to use",
       "Default" : "vpc-29d17050"
     },
-
     "Subnets" : {
       "Type" : "CommaDelimitedList",
       "Description" : "The list of SubnetIds for the WebServices, you should have at least 2 subnets in different availability zones",
       "Default" : "subnet-7d7cb836, subnet-cfffd0f3"
     },
-
     "KeyName" : {
       "Description" : "The EC2 Key Pair to allow SSH access to the instances",
       "Type" : "AWS::EC2::KeyPair::KeyName",
       "Default" : "advanced-analytics-05-18-2017",
       "ConstraintDescription" : "must be the name of an existing EC2 KeyPair."
     },
-
     "InstanceType" : {
       "Description" : "Ingest Server EC2 instance type",
       "Type" : "String",
@@ -57,7 +76,6 @@
       "AllowedValues" : [ "t2.large", "m3.large", "m3.xlarge", "m3.2xlarge", "m4.large", "m4.xlarge", "m4.2xlarge", "m4.4xlarge", "m4.10xlarge", "c3.xlarge", "c3.2xlarge", "c3.4xlarge", "c3.8xlarge", "c4.xlarge", "c4.2xlarge", "c4.4xlarge", "c4.8xlarge", "g2.2xlarge", "g2.8xlarge", "r3.large", "r3.xlarge", "r3.2xlarge", "r3.4xlarge", "r3.8xlarge"],
       "ConstraintDescription" : "must be a valid EC2 instance type with > 4GB of RAM."
     },
-
     "SSHLocation" : {
       "Description" : "The IP address range that can be used to SSH to the EC2 instances",
       "Type": "String",
@@ -66,9 +84,37 @@
       "Default": "0.0.0.0/0",
       "AllowedPattern": "(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})\\.(\\d{1,3})/(\\d{1,2})",
       "ConstraintDescription": "must be a valid IP CIDR range of the form x.x.x.x/x."
+    },
+    "PermissionsBoundary" : {
+      "Description" : "The DeveloperPolicy for creating IAM Roles",
+      "Default" : "arn:aws:iam::555555555555:policy/DeveloperPolicy",
+      "Type" : "String"
+    },
+    "StackSuffix" : {
+      "Description" : "The suffix that will be appended to all artifact names in the stack",
+      "Default" : "dev",
+      "Type" : "String"
+    },
+    "BastionSecurityGroup" : {
+      "Description" : "The Security Group associated with the Bastion Services",
+      "Type" : "AWS::EC2::SecurityGroup::Id",
+      "Default" : "sg-0dd8ab1573c2eed76",
+      "ConstraintDescription" : "Must be the ID of an existing security group."
+    }, 
+    "TileserverClientSecurityGroupId" : {
+      "Description" : "The security group associated with the ELB",
+      "Type" : "AWS::EC2::SecurityGroup::Id",
+      "Default" : "sg-050799fda71e6f129",
+      "ConstraintDescription" : "Must be the ID of an existing security group."
+    },
+    "JP2K" : {
+      "Description" : "A flag indicating jp2k support for ingest service. 0 -> off",
+      "Type" : "Number",
+      "Default" : "0",
+      "MinValue" : "0",
+      "MaxValue" : "1"
     }
   },
-
   "Mappings" : {
     "AWSInstanceType2Arch" : {
       "t2.large"    : { "Arch" : "HVM64"  },
@@ -113,7 +159,6 @@
       "cr1.8xlarge" : { "Arch" : "HVM64"  },
       "cc2.8xlarge" : { "Arch" : "HVM64"  }
     },
-
     "AWSInstanceType2NATArch" : {
       "m3.medium"   : { "Arch" : "NATHVM64"  },
       "m3.large"    : { "Arch" : "NATHVM64"  },
@@ -156,7 +201,6 @@
       "cr1.8xlarge" : { "Arch" : "NATHVM64"  },
       "cc2.8xlarge" : { "Arch" : "NATHVM64"  }
     },
-
     "AWSRegionArch2AMI" : {
       "us-east-1"        : {"PV64" : "ami-7a3dd76c", "HVM64" : "ami-0b33d91d", "HVMG2" : "ami-648d9973"},
       "us-west-2"        : {"PV64" : "ami-7f77b31f", "HVM64" : "ami-7172b611", "HVMG2" : "ami-09cd7a69"},
@@ -174,16 +218,121 @@
       "sa-east-1"        : {"PV64" : "ami-1ad34676", "HVM64" : "ami-6dd04501", "HVMG2" : "NOT_SUPPORTED"},
       "cn-north-1"       : {"PV64" : "ami-77559f1a", "HVM64" : "ami-8e6aa0e3", "HVMG2" : "NOT_SUPPORTED"}
     }
-
   },
-
+  "Conditions": {
+    "TileImagesBucketNotExisting": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateTileImagesBucket"
+        },
+        "true"
+      ]
+    },
+    "RawImagesBucketNotExisting": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateRawImagesBucket"
+        },
+        "true"
+      ]
+    },
+    "ImageMetadataTopicNotExisting": {
+      "Fn::Equals": [
+        {
+          "Ref": "CreateImageMetadataTopic"
+	},
+	"true"
+      ]
+    }
+  },
   "Resources" : {
-
-
-
+    "ObjectCreationTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Properties": {
+        "TopicName": {
+          "Ref": "NewDataItemSNSTopic"
+        }
+      }
+    },
+    "ObjectCreationTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Properties": {
+        "PolicyDocument": {
+          "Id": "ObjectCreationTopicPolicyDocument",
+          "Version": "2012-10-17",
+          "Statement": [
+            {
+              "Sid": "ObjectCreationTopicPolicy-id",
+              "Effect": "Allow",
+              "Principal": {
+                "AWS": "*"
+              },
+              "Action": "sns:Publish",
+              "Resource": {
+                "Ref": "ObjectCreationTopic"
+              },
+              "Condition": {
+                "ArnLike": {
+                  "aws:SourceArn": {
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:s3:*:*:",
+                        {
+                          "Ref": "RawImagesBucketName"
+                        }
+                      ]
+                    ]
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "Topics": [
+          {
+            "Ref": "ObjectCreationTopic"
+          }
+        ]
+      }
+    },
+    "RawImagesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "RawImagesBucketNotExisting",
+      "DeletionPolicy": "Retain",
+      "DependsOn": [
+        "ObjectCreationTopicPolicy"
+      ],
+      "Properties": {
+        "BucketName": {
+          "Ref": "RawImagesBucketName"
+        },
+        "NotificationConfiguration": {
+          "TopicConfigurations": [
+            {
+              "Event": "s3:ObjectCreated:*",
+              "Topic": {
+                "Ref": "ObjectCreationTopic"
+              }
+            }
+          ]
+        }
+      }
+    },
+    "TileImagesBucket": {
+      "Type": "AWS::S3::Bucket",
+      "Condition": "TileImagesBucketNotExisting",
+      "DeletionPolicy": "Retain",
+      "Properties": {
+        "BucketName": {
+          "Ref": "TileBucketName"
+        }
+      }
+    },
     "IngestServerRole": {
       "Type": "AWS::IAM::Role",
       "Properties": {
+        "RoleName": { "Fn::Sub": "AADev-IngestServerRole-${StackSuffix}" },
         "AssumeRolePolicyDocument": {
           "Version" : "2012-10-17",
           "Statement": [ {
@@ -194,14 +343,20 @@
             "Action": [ "sts:AssumeRole" ]
           } ]
         },
-        "Path": "/"
+        "Path": "/",
+        "ManagedPolicyArns": [
+             "arn:aws:iam::aws:policy/AmazonS3FullAccess",
+             "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore",
+             "arn:aws:iam::aws:policy/AmazonSSMDirectoryServiceAccess",
+             "arn:aws:iam::aws:policy/CloudWatchAgentServerPolicy"
+        ],
+        "PermissionsBoundary": { "Ref": "PermissionsBoundary" }
       }
     },
-
     "IngestServerRolePolicies": {
       "Type": "AWS::IAM::Policy",
       "Properties": {
-        "PolicyName": "image-consumer",
+        "PolicyName": { "Fn::Sub": "AADev-IngestServerPolicy-${StackSuffix}" },
         "PolicyDocument": {
           "Version" : "2012-10-17",
           "Statement": [ {
@@ -213,20 +368,20 @@
         "Roles": [ { "Ref": "IngestServerRole" } ]
       }
     },
-
     "IngestServerInstanceProfile" : {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
+        "InstanceProfileName": { "Fn::Sub": "AADev-IngestServerProfile-${StackSuffix}" },
         "Path": "/",
         "Roles": [ { "Ref": "IngestServerRole" } ]
       }
     },
-
     "IngestServerSecurityGroup" : {
       "Type" : "AWS::EC2::SecurityGroup",
       "Properties" : {
         "VpcId": { "Ref": "VpcId" },
         "GroupDescription" : "Enable SSH access from a restricted set of IPs and HTTP port 8080 from the load balancer only",
+        "GroupName": { "Fn::Sub": "IngestServerSecurityGroup-${StackSuffix}" },
         "SecurityGroupIngress" : [ {
           "IpProtocol" : "tcp",
           "FromPort" : "22",
@@ -235,7 +390,6 @@
         }]
       }
     },
-
     "IngestServerLaunchConfig" : {
       "Type" : "AWS::AutoScaling::LaunchConfiguration",
       "Metadata" : {
@@ -251,14 +405,28 @@
           "config" : {
             "packages" : {
               "yum" : {
-                "java-1.8.0-openjdk": [],
+                "java-1.8.0-openjdk-devel.x86_64": [],
                 "apache-commons-daemon-jsvc": []
               }
             },
 
             "files" : {
-              "/usr/share/imageingest/bin/image-ingest.jar" : {
-                "source": { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "image-ingest-service.jar" ]]},
+              "/usr/share/imageingest/bin/ingest-service.jar" : {
+                "source": { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "ingest-service.jar" ]]},
+                "mode"   : "000700",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/usr/share/imageingest/build-jp2k.sh" : {
+                "source": { "Fn::Join" : [ "/", [ "http://s3.amazonaws.com", { "Ref": "DeploymentArtifactsBucketName"}, "build-jp2k.sh" ]]},
+                "mode"   : "000777",
+                "owner"  : "root",
+                "group"  : "root",
+                "authentication": "S3AccessByRole"
+              },
+              "/usr/share/imageingest/jp2k-deps.zip" : {
+                "source": "http://s3.amazonaws.com/advanced-analytics-deployment/ingest-jp2k-deps.zip",
                 "mode"   : "000700",
                 "owner"  : "root",
                 "group"  : "root",
@@ -279,7 +447,7 @@
                 "context":  {
                   "IngestQueueName": { "Ref": "IngestQueue" },
                   "TileBucketName": { "Ref": "TileBucketName"},
-                  "MetadataTopicName": { "Ref": "MetadataTopicName"}
+                  "MetadataTopicName": { "Fn::GetAtt": ["MetadataTopic", "TopicName"]}
                 }
               },
 
@@ -308,8 +476,10 @@
               }
             },
             "commands" : {
-              "alternatives-set-java8" : {
-                "command" : "alternatives --set java /usr/lib/jvm/jre-1.8.0-openjdk.x86_64/bin/java"
+              "install-jp2k-deps" : {
+                "command" : {"Fn::Join" : ["", ["test ",
+                  { "Ref": "JP2K"}, 
+                  "==\"1\" && sudo /bin/bash /usr/share/imageingest/build-jp2k.sh"]]}
               }
             },
             "services" : {
@@ -323,7 +493,7 @@
         }
       },
       "Properties" : {
-        "AssociatePublicIpAddress": true,
+        "AssociatePublicIpAddress": false,
         "KeyName" : { "Ref" : "KeyName" },
         "ImageId" : { "Fn::FindInMap" : [ "AWSRegionArch2AMI", { "Ref" : "AWS::Region" },
                                           { "Fn::FindInMap" : [ "AWSInstanceType2Arch", { "Ref" : "InstanceType" }, "Arch" ] } ] },
@@ -347,7 +517,6 @@
         ]]}}
       }
     },
-
     "IngestServerASG" : {
       "Type" : "AWS::AutoScaling::AutoScalingGroup",
       "Properties" : {
@@ -357,18 +526,17 @@
         "MaxSize" : "1",
         "Tags" : [ {
           "Key" : "Name",
-          "Value": "IngestServices",
+          "Value": { "Fn::Sub": "IngestServices-${StackSuffix}" },
           "PropagateAtLaunch": "true"
         }]
       },
       "CreationPolicy" : {
         "ResourceSignal" : {
-          "Timeout" : "PT10M",
+          "Timeout" : "PT60M",
           "Count"   : "1"
         }
       }
     },
-
     "IngestServerScaleUpPolicy" : {
       "Type" : "AWS::AutoScaling::ScalingPolicy",
       "Properties" : {
@@ -387,11 +555,10 @@
         "ScalingAdjustment" : "-1"
       }
     },
-
     "IngestQueue" : {
       "Type" : "AWS::SQS::Queue",
       "Properties" : {
-        "QueueName" : "IngestQueue",
+        "QueueName" : { "Fn::Sub": "IngestQueue-${StackSuffix}" },
         "ReceiveMessageWaitTimeSeconds": 20,
         "VisibilityTimeout": 1200
       }
@@ -412,9 +579,17 @@
               ],
               "Resource": "*",
               "Condition": {
-                "ArnEquals": {
+                "ArnLike": {
                   "aws:SourceArn": {
-                    "Ref": "NewDataItemSNSTopic"
+                    "Fn::Join": [
+                      "",
+                      [
+                        "arn:aws:sns:*:*:",
+                        {
+                          "Ref": "NewDataItemSNSTopic"
+                        }
+                      ]
+                    ]
                   }
                 }
               }
@@ -429,10 +604,9 @@
       "Properties" : {
         "Endpoint" : {"Fn::GetAtt":["IngestQueue","Arn"]},
         "Protocol" : "sqs",
-        "TopicArn" : {"Ref" : "NewDataItemSNSTopic"}
+        "TopicArn" : { "Ref": "ObjectCreationTopic" }
       }
     },
-
     "IngestQueueBacklogAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -451,7 +625,6 @@
         "AlarmActions": [ { "Ref": "IngestServerScaleUpPolicy" } ]
       }
     },
-
     "IngestQueueEmptyAlarm": {
       "Type": "AWS::CloudWatch::Alarm",
       "Properties": {
@@ -468,6 +641,48 @@
         "Threshold": "1",
         "ComparisonOperator": "LessThanThreshold",
         "AlarmActions": [ { "Ref": "IngestServerScaleDownPolicy" } ]
+      }
+    },
+    "MetadataTopic": {
+      "Type": "AWS::SNS::Topic",
+      "Condition": "ImageMetadataTopicNotExisting",
+      "Properties": {
+        "DisplayName": { "Fn::Sub": "advanced-analytics-image-metadata-${StackSuffix}" },
+        "TopicName": { "Fn::Sub": "advanced-analytics-image-metadata-${StackSuffix}" }
+      }
+    },
+    "MetadataTopicPolicy": {
+      "Type": "AWS::SNS::TopicPolicy",
+      "Condition": "ImageMetadataTopicNotExisting",
+      "Properties": {
+        "Topics": [{ "Ref": "MetadataTopic" }],
+        "PolicyDocument": {
+          "Version": "2008-10-17",
+          "Id": { "Fn::Sub": "AADev-MetadataTopicPolicy-${StackSuffix}" },
+          "Statement": [{
+            "Effect": "Allow",
+            "Principal": {
+              "AWS": "*"
+            },
+            "Action": [
+              "SNS:GetTopicAttributes",
+              "SNS:SetTopicAttributes",
+              "SNS:AddPermission",
+              "SNS:RemovePermission",
+              "SNS:DeleteTopic",
+              "SNS:Subscribe",
+              "SNS:ListSubscriptionsByTopic",
+              "SNS:Publish",
+              "SNS:Receive"
+            ],
+            "Resource": {"Ref": "MetadataTopic"},
+            "Condition": {
+              "StringEquals": {
+                "AWS:SourceOwner": "555555555555"
+              }
+            }
+          }]
+        } 
       }
     }
   }

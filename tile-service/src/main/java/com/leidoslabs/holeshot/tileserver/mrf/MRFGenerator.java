@@ -60,7 +60,7 @@ public class MRFGenerator {
    public static void main(String[] args) {
       final String bucket = "advanced-analytics-geo-tile-images";
       final String bucketRegion = "us-east-1";
-      final String tileserverURL = "https://tileserver.leidoslabs.com";
+      final String tileserverURL = "https://tileserver-dev.leidoslabs.com";
       S3Handler s3Handler = new S3Handler(bucket, bucketRegion, 10);
       new MRFGenerator(s3Handler, bucketRegion, bucket, tileserverURL);
 

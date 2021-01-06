@@ -16,13 +16,15 @@
 
 package com.leidoslabs.holeshot.catalog.v1;
 
-import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import java.net.MalformedURLException;
+import java.net.URL;
+
 import org.locationtech.jts.geom.Polygon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.MalformedURLException;
-import java.net.URL;
+import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
+import com.leidoslabs.holeshot.elt.tileserver.TileserverUrlBuilder;
 
 @JsonDeserialize(using = CatalogEntryDeserializer.class)
 public class CatalogEntry {
@@ -45,7 +47,7 @@ public class CatalogEntry {
         URL metadataURL = null;
         if (imageLink != null) {
             try {
-                metadataURL = new URL(String.format("%s/metadata.json", imageLink));
+                metadataURL = TileserverUrlBuilder.getImageMetadataURL(imageLink);
             } catch (MalformedURLException e) {
                 LOGGER.error(e.getMessage(), e);
             }

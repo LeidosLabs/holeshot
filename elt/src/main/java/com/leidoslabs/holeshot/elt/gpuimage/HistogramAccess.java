@@ -17,9 +17,11 @@
 package com.leidoslabs.holeshot.elt.gpuimage;
 
 import java.awt.Dimension;
-import java.text.DecimalFormat;
+
 import org.joml.Vector2d;
+import org.joml.Vector2dc;
 import org.joml.Vector2i;
+import org.joml.Vector2ic;
 
 /**
  * Class for storing/retrieving histogram info, and for point conversions
@@ -29,10 +31,10 @@ public class HistogramAccess {
   private final Dimension histogramSize;
   private final int buckets;
   private final int maxPixel;
-  private final Vector2d uniformPixel;
-  private final Vector2d uniformHalfPixel;
-  private final Vector2d texturePixel;
-  private final Vector2d textureHalfPixel;
+  private final Vector2dc uniformPixel;
+  private final Vector2dc uniformHalfPixel;
+  private final Vector2dc texturePixel;
+  private final Vector2dc textureHalfPixel;
   private final int pixelsPerBucket;
 
   public HistogramAccess(Dimension histogramSize, int buckets, int maxPixel) {
@@ -61,35 +63,35 @@ public class HistogramAccess {
     return new Vector2i(col, row);
   }
 
-  public Vector2d getUniformPositionForRowCol(Vector2i rowColPosition) {
+  public Vector2dc getUniformPositionForRowCol(Vector2i rowColPosition) {
     return new Vector2d(rowColPosition).mul(uniformPixel).sub(1.0, 1.0).add(uniformHalfPixel); 
   }
 
-  public Vector2d getUniformPositionForIntensity(double uniformIntensity) {
+  public Vector2dc getUniformPositionForIntensity(double uniformIntensity) {
     Vector2i rowColPosition = getRowColPositionForIntensity(uniformIntensity);
     return getUniformPositionForRowCol(rowColPosition);
   }
 
-  public Vector2d getTexturePositionFromUniform(Vector2d uniformPosition) {
+  public Vector2dc getTexturePositionFromUniform(Vector2dc uniformPosition) {
     return new Vector2d(uniformPosition).add(1.0,1.0).mul(0.5);
   }
 
-  public Vector2d getUniformPositionFromTexture(Vector2d texturePosition) {
+  public Vector2dc getUniformPositionFromTexture(Vector2dc texturePosition) {
     return new Vector2d(texturePosition).mul(2.0).sub(1.0, 1.0);
   }
 
-  public Vector2i getRowColFromUniformPosition(Vector2d uniformPosition) {
-    Vector2d texPosition = getTexturePositionFromUniform(uniformPosition);
-    Vector2d result = new Vector2d(texPosition).sub(textureHalfPixel).mul(1.0 / texturePixel.x, 1.0/texturePixel.y);
-    return new Vector2i((int)result.x, (int)result.y);
+  public Vector2ic getRowColFromUniformPosition(Vector2dc uniformPosition) {
+    Vector2dc texPosition = getTexturePositionFromUniform(uniformPosition);
+    Vector2dc result = new Vector2d(texPosition).sub(textureHalfPixel).mul(1.0 / texturePixel.x(), 1.0/texturePixel.y());
+    return new Vector2i((int)result.x(), (int)result.y());
   }
 
-  public double getIntensityFromUniformPosition(Vector2d uniformPosition) {
-    Vector2i rowCol = getRowColFromUniformPosition(uniformPosition);
-    return ((double)(rowCol.y * histogramSize.getWidth() + rowCol.x))/(double)maxPixel;
+  public double getIntensityFromUniformPosition(Vector2dc uniformPosition) {
+    Vector2ic rowCol = getRowColFromUniformPosition(uniformPosition);
+    return ((double)(rowCol.y() * histogramSize.getWidth() + rowCol.x()))/(double)maxPixel;
   }
 
-  public Vector2d getTexturePositionForRowCol(Vector2i rowColPosition) {
+  public Vector2dc getTexturePositionForRowCol(Vector2i rowColPosition) {
     return getTexturePositionFromUniform(getUniformPositionForRowCol(rowColPosition));
   }
 
@@ -105,19 +107,19 @@ public class HistogramAccess {
     return maxPixel;
   }
 
-  public Vector2d getUniformPixel() {
+  public Vector2dc getUniformPixel() {
     return uniformPixel;
   }
 
-  public Vector2d getUniformHalfPixel() {
+  public Vector2dc getUniformHalfPixel() {
     return uniformHalfPixel;
   }
 
-  public Vector2d getTexturePixel() {
+  public Vector2dc getTexturePixel() {
     return texturePixel;
   }
 
-  public Vector2d getTextureHalfPixel() {
+  public Vector2dc getTextureHalfPixel() {
     return textureHalfPixel;
   }
 

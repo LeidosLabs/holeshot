@@ -17,7 +17,6 @@ package com.leidoslabs.holeshot.elt.tileserver;
 
 import java.awt.Rectangle;
 import java.awt.geom.Point2D;
-import java.awt.geom.Rectangle2D;
 import java.awt.image.BufferedImage;
 import java.io.FileNotFoundException;
 import java.io.IOException;
@@ -30,12 +29,10 @@ import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.IntStream;
 
-import org.apache.commons.lang3.NotImplementedException;
 import org.image.common.cache.CacheableUtil;
 import org.joml.Vector2d;
+import org.joml.Vector2dc;
 import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.Envelope;
-import org.locationtech.jts.geom.GeometryFactory;
 import org.locationtech.jts.geom.Polygon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -57,21 +54,15 @@ import com.leidoslabs.holeshot.tileserver.v1.TileServerClientBuilder;
 public class TileserverImage implements ImageTileFetcher {
 	private static final Logger LOGGER = LoggerFactory.getLogger(TileserverImage.class);
 
-	private static final String IMAGE_CRS_WKT = "IMAGE_CRS_WKT";
-	private static final String RASTER_TO_MODEL_WKT = "RASTER_TO_MODEL_WKT";
-	private static int READ_RETRIES = 3;
-	private CameraModel cameraModel;
-	private TilePyramidDescriptor tilePyramidDescriptor;
-	private TileserverUrlBuilder tileserverUrlBuilder;
-	private GeometryFactory geometryFactory;
-	private GeometryUtils geometryUtils;
+	private final CameraModel cameraModel;
+	private final TilePyramidDescriptor tilePyramidDescriptor;
+	private final TileserverUrlBuilder tileserverUrlBuilder;
 	private final TileServerClient tileServerClient;
-	private TileRef topTile;
+	private final TileRef topTile;
+	private final String collectionId;
+	private final String timestamp;
+//	private final double maxImageDimension;
 
-	private final double maxImageDimension;
-	private final Vector2d openGLOffset;
-
-	
 	/**
 	 * Builds a TileServerClient, and a builds TilePyramidDescriptor and CameraModel from metadata
 	 * and comptues some other useful info about the image
@@ -91,42 +82,65 @@ public class TileserverImage implements ImageTileFetcher {
 
 		this.tilePyramidDescriptor = TileserverTileCache.getInstance()
 				.getTilePyramidDescriptor(tileServerClient, getCollectionID(), getTimestamp());
+		this.collectionId = null;
+		this.timestamp = null;
 
 		if (tilePyramidDescriptor == null) {
 			throw new FileNotFoundException(String.format("Can't find metadata for %s", imageMetadataURL.toString()));
 		}
-		this.geometryFactory = new GeometryFactory();
-		this.geometryUtils = new GeometryUtils(this.geometryFactory);
 
-		buildCameraFromMetadata();
+	    cameraModel = RPCCameraModelFactory.buildRPCCameraFromMetadata(getMetadata());
 
 		final int maxRset = getTilePyramidDescriptor().getMaxRLevel();
 		this.topTile = new TileRef(this, maxRset, 0, 0);
-		//    maxImageDimension = Math.max(getR0ImageWidth(), getR0ImageHeight());
-		maxImageDimension = Math.max(tilePyramidDescriptor.getTileWidth(),tilePyramidDescriptor.getTileHeight()) * Math.pow(2.0, maxRset);
-
-		Rectangle fullTopTile = topTile.getFullR0RectInImageSpace();
-		openGLOffset = new Vector2d(1.0 - (double)getR0ImageWidth() / fullTopTile.getWidth(),
-				(double)getR0ImageHeight()/fullTopTile.getHeight() - 1.0);
-
-		LOGGER.debug("openGLOffset == " + openGLOffset.toString());
-	}
-	
-
-	public Vector2d getOpenGLOffset() {
-		return openGLOffset;
+//		maxImageDimension = Math.max(tilePyramidDescriptor.getTileWidth(),tilePyramidDescriptor.getTileHeight()) * Math.pow(2.0, maxRset);
 	}
 
+	   /**
+     * Build the camera model when you already have the metadata and don't need a client
+     * @param tilePyramidDescriptor The metadata descriptor
+     */
+	public TileserverImage(TilePyramidDescriptor tilePyramidDescriptor) {
+
+		this.tileserverUrlBuilder = null;
+	    this.tileServerClient = null;
+	    this.tilePyramidDescriptor = tilePyramidDescriptor;
+	    this.collectionId = tilePyramidDescriptor.getName().split(":")[0];
+	    this.timestamp = tilePyramidDescriptor.getName().split(":")[1];
+
+	    cameraModel = RPCCameraModelFactory.buildRPCCameraFromMetadata(getMetadata());
+
+        final int maxRset = getTilePyramidDescriptor().getMaxRLevel();
+        this.topTile = new TileRef(this, maxRset, 0, 0);
+//        maxImageDimension = Math.max(tilePyramidDescriptor.getTileWidth(),tilePyramidDescriptor.getTileHeight()) * Math.pow(2.0, maxRset);
+    }
+
+	public double getGSD(Coordinate latLon, double rset) {
+		final double r0GSD = cameraModel.getGSD(GeometryUtils.toPoint2D(latLon));
+		final double rsetGSD = Math.pow(2.0, rset) * r0GSD;
+		return rsetGSD;
+	}
+
+
+	public String getImageBaseURL() {
+		return tileserverUrlBuilder.getImageBaseURL();
+	}
 	public String getImageMetadataURL() {
 		return tileserverUrlBuilder.getImageMetadataURL();
 	}
 
 	public String getCollectionID() {
-		return tileserverUrlBuilder.getCollectionID();
+	    if(this.collectionId == null) {
+            return tileserverUrlBuilder.getCollectionID();
+        }
+	    return this.collectionId;
 	}
 
 	public String getTimestamp() {
-		return tileserverUrlBuilder.getTimestamp();
+	    if(this.timestamp == null) {
+            return tileserverUrlBuilder.getTimestamp();
+        }
+	    return this.timestamp;
 	}
 
 	public CameraModel getCameraModel() {
@@ -145,135 +159,50 @@ public class TileserverImage implements ImageTileFetcher {
 	 * @param src
 	 * @return normalized point between [0, 1] based off maxImageDimension
 	 */
-	public Point2D normalize(Point2D src) {
-		return new Point2D.Double(normalize(src.getX()), normalize(src.getY()));
-	}
+//	public Point2D normalize(Point2D src) {
+//		return new Point2D.Double(normalize(src.getX()), normalize(src.getY()));
+//	}
 	/**
 	 * @param src
 	 * @return maps points from [0,1] -> [0, maxImageDimension]
 	 */
-	public Point2D deNormalize(Point2D src) {
-		return new Point2D.Double(deNormalize(src.getX()), deNormalize(src.getY()));
-	}
+//	public Point2D deNormalize(Point2D src) {
+//		return new Point2D.Double(deNormalize(src.getX()), deNormalize(src.getY()));
+//	}
 	
 	/**
 	 * @param src
 	 * @return normalized point between [0, 1] based off maxImageDimension
 	 */
-	public double normalize(double src) {
-		return src/maxImageDimension;
-
-	}
+//	public double normalize(double src) {
+//		return src/maxImageDimension;
+//
+//	}
 	
 	/**
 	 * @param src
 	 * @return maps points from [0,1] -> [0, maxImageDimension]
 	 */
-	public double deNormalize(double src) {
-		return src*maxImageDimension;
-	}
+//	public double deNormalize(double src) {
+//		return src*maxImageDimension;
+//	}
 	
-	
-	/**
-	 * @param imageCoord
-	 * @return imagespace -> [-1, 1]
-	 */
-	public Vector2d imageToOpenGL(Vector2d imageCoord) {
-		Vector2d result = new Vector2d(normalize(imageCoord.x) * 2.0 - 1.0, (1.0 - normalize(imageCoord.y)) * 2.0 - 1.0).add(openGLOffset);
-		return result;
-	}
-	/**
-	 * @param imageCoord
-	 * @return imagespace -> [-1, 1]
-	 */
-	public Coordinate imageToOpenGL(Coordinate imageCoord) {
-		return GeometryUtils.toCoordinate(imageToOpenGL(GeometryUtils.toVector2d(imageCoord)));
-	}
-	/**
-	 * @param openGLCoord
-	 * @return [-1, 1] -> imagespace
-	 */
-	public Vector2d openGLToImage(Vector2d openGLCoord) {
-		Vector2d adjustedCoord = openGLCoord.sub(openGLOffset);
-		return new Vector2d(deNormalize((adjustedCoord.x + 1.0)/ 2.0), deNormalize(1.0-(adjustedCoord.y + 1.0)/2.0));
-	}
-	
-	/**
-	 * @param openGLCoord
-	 * @return [-1, 1] imagespace
-	 */
-	public Coordinate openGLToImage(Coordinate openGLCoord) {
-		return GeometryUtils.toCoordinate(openGLToImage(GeometryUtils.toVector2d(openGLCoord)));
-	}
-
-	/**
-	 * @param imageRect
-	 * @return imagespace -> [-1, 1]
-	 */
-	public Rectangle2D.Double imageToOpenGL(Rectangle imageRect) {
-		Vector2d llImage = new Vector2d(imageRect.getMinX(), imageRect.getMinY());
-		Vector2d llOpenGL = imageToOpenGL(llImage);
-
-		Vector2d urImage = new Vector2d(imageRect.getMaxX(), imageRect.getMaxY());
-		Vector2d urOpenGL = imageToOpenGL(urImage);
-
-		return new Rectangle2D.Double(llOpenGL.x, llOpenGL.y, urOpenGL.x() - llOpenGL.x(), urOpenGL.y() - llOpenGL.y());
-	}
-
-	/**
-	 * @param imageSpacePoly
-	 * @return imagespace -> [-1, 1]
-	 */
-	public Polygon imageToOpenGL(Polygon imageSpacePoly) {
-		return geometryFactory.createPolygon(Arrays.stream(imageSpacePoly.getCoordinates()).map(this::imageToOpenGL).toArray(Coordinate[]::new));
-	}
-	
-	/**
-	 * @param offsetX
-	 * @param offsetY
-	 * @param width
-	 * @param height
-	 * @return 3D ImageSpace polygon
-	 */
-	protected Polygon getRectImageSpacePolygon(double offsetX, double offsetY, double width,
-			double height) {
-		Polygon polygon = geometryFactory
-				.createPolygon(new Coordinate[] {new Coordinate(offsetX, offsetY + height - 1.0, 0.0),
-						new Coordinate(offsetX + width - 1.0, offsetY + height - 1.0, 0.0),
-						new Coordinate(offsetX + width - 1.0, offsetY, 0.0), new Coordinate(offsetX, offsetY, 0.0),
-						new Coordinate(offsetX, offsetY + height - 1.0, 0.0)});
-		return polygon;
-	}
-
-	/**
-	 * @param rset
-	 * @return image space polyon
-	 */
-	protected Polygon getImagePolygon(int rset) {
-		ImageScale rsetScale = ImageScale.forRset(rset);
-		Point2D normalizedPoint = normalize(new Point2D.Double(getR0ImageWidth(), getR0ImageHeight()));
-		Point2D scaledDownPoint = rsetScale.scaleDownToRset(normalizedPoint);
-		return getRectImageSpacePolygon(0, 0, scaledDownPoint.getX(), scaledDownPoint.getY());
-	}
-
-	public GeometryFactory getGeometryFactory() {
-		return geometryFactory;
-	}
-
-
 	public TileRef getTopTile() {
 		return topTile;
 	}
-
 	
+	public CoreImage getTileserverTile(TileRef tileRef) throws IOException {
+		return getTileserverTile(tileRef, false);
+	}
+
 	/**
 	 * Retrieves tile data for each band and merges
 	 */
-	public CoreImage getTileserverTile(TileRef tileRef) throws IOException {
+	public CoreImage getTileserverTile(TileRef tileRef, boolean minPriority) throws IOException {
 		final int numBands = getNumBands();
 
 		CoreImage[] bands = IntStream.range(0, Math.min(3, numBands)).parallel()
-				.mapToObj(i -> getTileserverTileForBand(tileRef.getForBand(i))).toArray(CoreImage[]::new);
+				.mapToObj(i -> getTileserverTileForBand(tileRef.getForBand(i), minPriority)).toArray(CoreImage[]::new);
 
 		CoreImage tileserverTile = null;
 		if (Arrays.stream(bands).noneMatch(b->b == null)) {
@@ -281,7 +210,9 @@ public class TileserverImage implements ImageTileFetcher {
 			if (numBands > 0 && numBands < 3) {
 				tileserverTile = mergeBands(new CoreImage[] { bands[0], bands[0], bands[0], alpha});
 			} else {
-				tileserverTile = mergeBands(new CoreImage[] { bands[0], bands[1], bands[2], alpha});
+				// TODO: Need to figure out a band selection strategy that isn't just a hardcoding.  (e.g. Is this in the original
+				// image metadata? Do I need a user panel for it?)
+				tileserverTile = mergeBands(new CoreImage[] { bands[2], bands[1], bands[0], alpha});
 			}
 		}
 
@@ -303,62 +234,15 @@ public class TileserverImage implements ImageTileFetcher {
 	 * @param tileRef
 	 * @return
 	 */
-	protected CoreImage getTileserverTileForBand(TileRef tileRef) {
+	protected CoreImage getTileserverTileForBand(TileRef tileRef, boolean minPriority) {
 		CoreImage result = null;
 		try {
-			result = TileserverTileCache.getInstance().getTileserverTileForBand(this, tileRef);
+			result = TileserverTileCache.getInstance().getTileserverTileForBand(this, tileRef, false, minPriority);
 		} catch (IOException e) {
 			e.printStackTrace();
 			throw new RuntimeException(e);
 		}
 		return result;
-	}
-
-	protected int getRset(int level) {
-		return getMaxRLevel() - level;
-	}
-
-	/**
-	 * Get worldwind tile key
-	 * @param row
-	 * @param column
-	 * @param tileLevel
-	 * @return
-	 */
-	private String getWorldwindTileKey(int row, int column, int tileLevel) {
-		return String.format("%s/%s/%d/%d/%d", getCollectionID(), getTimestamp(), tileLevel, row,
-				column);
-	}
-
-	
-	protected CoreImage buildWorldwindTile(int row, int column, int tileWidth,
-			int tileHeight, int tileLevel, Envelope tileBBox) throws IOException {
-		throw new NotImplementedException("buildWorldwindTile not implemented at this time");
-	}
-
-	private void buildCameraFromMetadata() throws IOException {
-		//      try {
-		final Map<String, Object> meta = getMetadata();
-		cameraModel = RPCCameraModelFactory.buildRPCCameraFromMetadata(meta);
-		//         if (cameraModel == null) {
-		//            final String imageCRSWKT = (String)meta.get(IMAGE_CRS_WKT);
-		//            final String rasterToModelWKT = (String)meta.get(RASTER_TO_MODEL_WKT);
-		//
-		//            if (imageCRSWKT != null && rasterToModelWKT != null) {
-		//               final CoordinateReferenceSystem imageCRS = CRS.parseWKT(imageCRSWKT);
-		//               final MathTransform rasterToModel = new DefaultMathTransformFactory().createFromWKT(rasterToModelWKT);
-		//
-		//               cameraModel = new MapProjectionCamera(rasterToModel, imageCRS, DefaultGeographicCRS.WGS84);
-		//
-		//               LOGGER.debug("referencePoint == " + cameraModel.getReferencePoint().toString());
-		//            }
-		//         }
-		//      } catch (FactoryException e) {
-		//         throw new IOException(e);
-		//      } catch (NoninvertibleTransformException e) {
-		//         // TODO Auto-generated catch block
-		//         e.printStackTrace();
-		//      }
 	}
 
 	public int getMaxPixelValue() {
@@ -398,10 +282,37 @@ public class TileserverImage implements ImageTileFetcher {
 	public TileServerClient getTileServerClient() {
 		return tileServerClient;
 	}
-
+	
+	/**
+	 * @param offsetX
+	 * @param offsetY
+	 * @param width
+	 * @param height
+	 * @return 3D ImageSpace polygon
+	 */
+	protected Polygon getRectImageSpacePolygon(double offsetX, double offsetY, double width,
+			double height) {
+		Polygon polygon = GeometryUtils.GEOMETRY_FACTORY
+				.createPolygon(new Coordinate[] {new Coordinate(offsetX, offsetY + height - 1.0, 0.0),
+						new Coordinate(offsetX + width - 1.0, offsetY + height - 1.0, 0.0),
+						new Coordinate(offsetX + width - 1.0, offsetY, 0.0), new Coordinate(offsetX, offsetY, 0.0),
+						new Coordinate(offsetX, offsetY + height - 1.0, 0.0)});
+		return polygon;
+	}
+	/**
+	 * @param rset
+	 * @return image space polyon
+	 */
+//	protected Polygon getImagePolygon(int rset) {
+//		ImageScale rsetScale = ImageScale.forRset(rset);
+//		Point2D normalizedPoint = normalize(new Point2D.Double(getR0ImageWidth(), getR0ImageHeight()));
+//		Point2D scaledDownPoint = rsetScale.scaleDownToRset(normalizedPoint);
+//		return getRectImageSpacePolygon(0, 0, scaledDownPoint.getX(), scaledDownPoint.getY());
+//	}
+	
 	public long getSizeInBytes() {
 		return CacheableUtil.getDefault().getSizeInBytesForObjects(cameraModel, tilePyramidDescriptor,
-				tileserverUrlBuilder, geometryFactory, tileServerClient);
+				tileserverUrlBuilder, tileServerClient);
 	}
 
 
@@ -455,8 +366,49 @@ public class TileserverImage implements ImageTileFetcher {
 		return new CoreImage(image);
 	}
 
+	public Rectangle getRsetImageRectangle(int rset) {
+		Point2D rsetDimension = ImageScale.forRset(rset).scaleDownToRset(new Point2D.Double(getR0ImageWidth(), getR0ImageHeight()));
+		return new Rectangle(0,0,(int)Math.floor(rsetDimension.getX() + 1E-5), (int)Math.floor(rsetDimension.getY()+1E-5));
+	}
+	
 	public Rectangle getR0ImageRectangle() {
 		return new Rectangle(0,0,getR0ImageWidth(), getR0ImageHeight());
+	}
+
+	public Polygon getR0ImageBounds() {
+		final Rectangle r0Image = getR0ImageRectangle();
+		final Polygon r0ImageBounds = GeometryUtils.GEOMETRY_FACTORY.createPolygon(
+				Arrays.stream(
+						new double[][] {
+							{r0Image.getMinX(), r0Image.getMinY()},
+							{r0Image.getMaxX()-1, r0Image.getMinY()},
+							{r0Image.getMaxX()-1, r0Image.getMaxY()-1},
+							{r0Image.getMinX(), r0Image.getMaxY()-1},
+							{r0Image.getMinX(), r0Image.getMinY()}
+						}).map(c->new Coordinate(c[0], c[1], 0.0))
+				.toArray(Coordinate[]::new));
+		return r0ImageBounds;
+	}
+	
+	public Polygon getGeodeticBounds() {
+		final CameraModel camera = getCameraModel();
+		final Polygon geodeticFootprint = GeometryUtils.GEOMETRY_FACTORY.createPolygon(
+				Arrays.stream(getR0ImageBounds().getCoordinates())
+				.map(c->camera.imageToWorld(GeometryUtils.toPoint2D(c)))
+				.toArray(Coordinate[]::new));
+		return geodeticFootprint;
+
+	}
+	public double getAngleOffNorth() {
+		final Polygon imageGeoBounds = getGeodeticBounds();
+		final Coordinate[] imageGeoBoundsCoords = imageGeoBounds.getCoordinates();
+
+		Vector2dc[] imageGeoBoundsVecs = Arrays.stream(imageGeoBoundsCoords).map(c->GeometryUtils.toVector2d(c)).toArray(Vector2dc[]::new);
+		final Vector2dc imageLLGeoVec = imageGeoBoundsVecs[0];
+		final Vector2dc imageULGeoVec = imageGeoBoundsVecs[3];
+		final Vector2dc northVec = new Vector2d(0.0, 90.0);
+		final double angleOffNorth = northVec.angle(imageLLGeoVec.sub(imageULGeoVec, new Vector2d()));
+		return angleOffNorth;
 	}
 
 }

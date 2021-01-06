@@ -21,7 +21,7 @@ import com.leidoslabs.holeshot.elt.imagechain.PingPongFramebuffer;
 /**
  * Interface for defining DRAParameters
  */
-public interface DRAParameters extends ImageOp {
+public interface DRAParameters extends ImageOpPrimitive {
    public PingPongFramebuffer getEFirstFramebuffer();
    public PingPongFramebuffer getEMinFramebuffer();
    public PingPongFramebuffer getEMaxFramebuffer();

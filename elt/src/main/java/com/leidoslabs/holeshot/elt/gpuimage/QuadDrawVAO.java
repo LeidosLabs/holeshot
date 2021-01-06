@@ -54,7 +54,7 @@ public class QuadDrawVAO implements Closeable {
   public static final double[][] FULL_UNIFORM_QUAD =
       new double[][] {{-1.0, 1.0, 0.0}, {-1.0, -1.0, 0.0}, {1.0, 1.0, 0.0}, {1.0, -1.0, 0.0}};
   public static final double[][] FULL_TEXTURE_QUAD =
-      new double[][] {{0.0, 1.0}, {0.0, 0.0}, {1.0, 1.0}, {1.0, 0.0}};
+      new double[][] {{0.0, 0.0}, {0.0, 1.0}, {1.0, 0.0}, {1.0, 1.0}};
 
 
   private final int vao;
@@ -127,10 +127,14 @@ public class QuadDrawVAO implements Closeable {
     ByteBuffer bytebuffer = glMapBuffer(GL_ARRAY_BUFFER, GL_WRITE_ONLY);
     DoubleBuffer doublebuffer = bytebuffer.order(ByteOrder.nativeOrder()).asDoubleBuffer();
 
-    IntStream.range(0, vertices.length).forEach(i -> {
-      (textureCoordsGiven ? Streams.concat(Arrays.stream(vertices[i]),
-          Arrays.stream(textureCoords[i]), Arrays.stream(new double[] {0, 0, 1}))
-          : Arrays.stream(vertices[i])).forEach(v -> doublebuffer.put(v));
+    IntStream.range(0, vertices.length).forEach(i -> 
+    {
+      (textureCoordsGiven ? 
+    		  Streams.concat(Arrays.stream(vertices[i]),
+                             Arrays.stream(textureCoords[i]), 
+                             Arrays.stream(new double[] {0, 0, 1}))
+          : 
+        	  Arrays.stream(vertices[i])).forEach(v -> doublebuffer.put(v));
     });
 
     glUnmapBuffer(GL_ARRAY_BUFFER);

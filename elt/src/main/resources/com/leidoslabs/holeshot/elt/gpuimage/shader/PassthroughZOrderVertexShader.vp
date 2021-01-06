@@ -1,0 +1,17 @@
+#version 400 core
+
+layout(location = 0) in vec3 position;
+
+out VertexData {
+   vec2 uniformCoord;
+} vs_out;
+
+uniform float zOrder;
+
+#include HistogramAccess.vp
+
+void main() {
+    resetFBSize(fbDim, maxPixel, buckets);
+    vs_out.uniformCoord = position.xy;
+    gl_Position = vec4(position.xy, zOrder, 1.0);
+}

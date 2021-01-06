@@ -2,22 +2,25 @@ import boto3
 import os
 import json
 import time
+from pathlib import Path
 
 # This script will download all the metadata.json files associated with imagery in the given bucket, and then submit them to the
 # SNS queue as if they had been pushed by the image server. For more than a few thousand images it would probably be wise
 # to perform a more direct ingest without the round trip of downloading and republishing the files.
 
 bucket = 'advanced-analytics-geo-tile-images'
-sns_arn = 'arn:aws:sns:us-east-1:199974664221:advanced-analytics-image-metadata'
+sns_arn = 'arn:aws:sns:us-east-1:555555555555:advanced-analytics-image-metadata'
 
 s3_client = boto3.client('s3')
 s3_resource = boto3.resource('s3')
 sns_client = boto3.client('sns')
 
 keys_per_fetch = 11
-max_iter = 1
+max_iter = 1000
 staging_path = './metadata/'
 publish_delay = 1 # seconds to wait between each publish. necessary until the ingest lambda handles backoff retry better
+
+Path(staging_path).mkdir(parents=True, exist_ok=True)
 
 i = 1
 total_fetched = 0
@@ -52,7 +55,10 @@ for prefix in image_prefixes:
             local_path = local_path + "_" + str(i)
         s3_path = o['Prefix'] + 'metadata.json'
         print('Getting ' + s3_path)
-        s3_resource.Bucket(bucket).download_file(s3_path,  local_path + '.json')
+        try:
+            s3_resource.Bucket(bucket).download_file(s3_path,  local_path + '.json')
+        except:
+            print("Error retrieving " + s3_path + '.json')
 
 # Publish metadata to SNS
 for file in os.listdir(staging_path):

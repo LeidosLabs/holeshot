@@ -15,22 +15,6 @@
  */
 package com.leidoslabs.holeshot.tileserver.service.wmts;
 
-
-/*
- * Licensed to The Leidos Corporation under one or more contributor license agreements.  
- * See the NOTICE file distributed with this work for additional information regarding copyright ownership.
- * The Leidos Corporation licenses this file to You under the Apache License, Version 2.0
- * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
- *
- *     http://www.apache.org/licenses/LICENSE-2.0
- *
- * Unless required by applicable law or agreed to in writing, software
- * distributed under the License is distributed on an "AS IS" BASIS,
- * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
- * See the License for the specific language governing permissions and
- * limitations under the License.
- */
 import com.leidoslabs.holeshot.tileserver.service.S3Handler;
 
 import org.json.simple.JSONObject;
@@ -124,9 +108,36 @@ public class WMTSService {
                         @PathParam("row") String row,
                         @PathParam("band") String band) {
         Response response = null;
+        logTile(imageId, timestamp, rSet, col, row);
         response = s3Handler.getResponse(servletRequest, String.join("/", imageId, timestamp, rSet, col, row, band + ".png"));
         return response;
     }
+    
+    /**
+     * getTile with a userID field, so we can track requests at a user level.
+     * @param imageId
+     * @param timestamp
+     * @param rSet
+     * @param col
+     * @param row
+     * @param band
+     * @return
+     */
+    @GET
+    @Produces({"image/png"})
+    @Path("{userID}/{imageId}/{timestamp}/tile/{rSet}/{col}/{row}/{band}.png")
+    public Response getTileUser(@PathParam("userID") String userID,
+    		@PathParam("imageId") String imageId,
+            @PathParam("timestamp") String timestamp,
+            @PathParam("rSet") String rSet,
+            @PathParam("col") String col,
+            @PathParam("row") String row,
+            @PathParam("band") String band) {
+		Response response = null;
+		logTile(userID, imageId, timestamp, rSet, col, row);
+		response = s3Handler.getResponse(servletRequest, String.join("/", imageId, timestamp, rSet, col, row, band + ".png"));
+		return response;
+		}
 
     /**
      * getTileOld is the same as getTile but without "tile" in the path, making it compatible with the non-wmts client.
@@ -146,6 +157,22 @@ public class WMTSService {
         response = s3Handler.getResponse(servletRequest, String.join("/", imageId, timestamp, rSet, col, row, band + ".png"));
         return response;
     }
+    
+    @GET
+    @Produces({"image/png"})
+    @Path("{userID}/{imageId}/{timestamp}/{rSet}/{col}/{row}/{band}.png")
+    public Response getTileUserOld(@PathParam("userID") String userID,
+    		@PathParam("imageId") String imageId,
+            @PathParam("timestamp") String timestamp,
+            @PathParam("rSet") String rSet,
+            @PathParam("col") String col,
+            @PathParam("row") String row,
+            @PathParam("band") String band) {
+		Response response = null;
+		logTile(userID, imageId, timestamp, rSet, col, row);
+		response = s3Handler.getResponse(servletRequest, String.join("/", imageId, timestamp, rSet, col, row, band + ".png"));
+		return response;
+		}
 
     
     /**
@@ -163,10 +190,68 @@ public class WMTSService {
         response = s3Handler.getResponse(servletRequest, String.join("/", imageId, timestamp, "metadata.json"));
         return response;
     }
+
+    /**
+     * Uses S3 Handler to fetch tile from either S3 or Cache
+     * @param imageId
+     * @param timestamp
+     * @param rSet
+     * @param col
+     * @param row
+     * @param band
+     * @return
+     */
+    @GET
+    @Produces({"application/json"})
+    @Path("/cache/{imageId}/{timestamp}/tile/{rSet}/{col}/{row}/{band}.png")
+    public Response cacheTile(@PathParam("imageId") String imageId,
+                            @PathParam("timestamp") String timestamp,
+                            @PathParam("rSet") String rSet,
+                            @PathParam("col") String col,
+                            @PathParam("row") String row,
+                            @PathParam("band") String band) {
+        Response response;
+        String wholeKey = String.join("/", imageId, timestamp, rSet, col, row, band + ".png");
+        try {
+            if(s3Handler.cacheOnlyFromS3(wholeKey)) {
+                response = Response.ok().build();
+            } else {
+                response = Response.serverError().build();
+                LOGGER.error("Failed cacheTile request for " + wholeKey + " Reason unknown.");
+            }
+        } catch (Exception e) {
+            LOGGER.error("Error Processing cacheTile request for " + wholeKey, e);
+            response = Response.serverError().build();
+        }
+        return response;
+    }
+
+    @GET
+    @Produces({"application/json"})
+    @Path("/cache/{imageId}/{timestamp}/{rSet}/{col}/{row}/{band}.png")
+    public Response cacheTileOld(@PathParam("imageId") String imageId,
+                              @PathParam("timestamp") String timestamp,
+                              @PathParam("rSet") String rSet,
+                              @PathParam("col") String col,
+                              @PathParam("row") String row,
+                              @PathParam("band") String band) {
+        return cacheTile(imageId, timestamp, rSet, col, row, band);
+    }
     
     private void logTile(String imageId, String timestamp, String rSet, String col, String row) {
     	Map<String,String> msgMap = new HashMap<>();
         msgMap.put("imageID", imageId+ ":" + timestamp);
+        msgMap.put("rSet", rSet);
+        msgMap.put("x", col);
+        msgMap.put("y", row);
+        JSONObject message = new JSONObject(msgMap);
+        REQUEST_LOGGER.info(message.toString());
+    }
+    
+    private void logTile(String userID, String imageId, String timestamp, String rSet, String col, String row) {
+    	Map<String,String> msgMap = new HashMap<>();
+    	msgMap.put("userID", userID);
+    	msgMap.put("imageID", imageId+ ":" + timestamp);
         msgMap.put("rSet", rSet);
         msgMap.put("x", col);
         msgMap.put("y", row);

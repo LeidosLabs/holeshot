@@ -17,12 +17,14 @@ package com.leidoslabs.holeshot.imaging.photogrammetry.rpc;
 
 import java.awt.geom.Point2D;
 import java.util.Arrays;
+import java.util.Map;
 
 import org.apache.commons.math3.linear.ArrayRealVector;
 import org.apache.commons.math3.linear.MatrixUtils;
 import org.apache.commons.math3.linear.RealMatrix;
 import org.apache.commons.math3.linear.RealVector;
 import org.apache.commons.math3.linear.SingularValueDecomposition;
+import org.image.common.util.NumberUtils;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -48,9 +50,13 @@ public class RpcSolver {
 
    private boolean theUseElevationFlag;
    private boolean theHeightAboveMSLFlag;
+   private boolean isChip;
    @SuppressWarnings("unused")
    private double theMeanResidual;
    private double theMaxResidual;
+   private double rowOffset;
+   private double colOffset;
+   private double scaleFactor;
 
    public RpcSolver(boolean useElevation,
          boolean useHeightAboveMSLFlag)
@@ -60,7 +66,24 @@ public class RpcSolver {
       theMeanResidual = 0.0;
       theMaxResidual = 0.0;
       rpcCameraModel = null;
+      isChip = false;
    }
+   
+   public RpcSolver(boolean useElevation,
+	         boolean useHeightAboveMSLFlag, 
+	         double rowOffset, double colOffset,
+	         double scaleFactor)
+	   {
+	      theUseElevationFlag   = useElevation;
+	      theHeightAboveMSLFlag = useHeightAboveMSLFlag;
+	      theMeanResidual = 0.0;
+	      theMaxResidual = 0.0;
+	      rpcCameraModel = null;
+	      isChip = true;
+	      this.rowOffset = rowOffset;
+	      this.colOffset = colOffset;
+	      this.scaleFactor = scaleFactor;
+	   }
 
     /**
      * Solves for coefficients by first creating a discrete regular grid of xSamples x ySamples control points within
@@ -304,6 +327,14 @@ public class RpcSolver {
       if(Double.isNaN(norm.getHtOff()))
       {
          norm.setHtOff(0.0);
+      }
+      
+      if (this.isChip) {
+    	  LOGGER.debug("ICHIPB TRE found; adjusting offset and scale to image chip coordinates");
+          norm.setLineScale(norm.getLineScale() / scaleFactor);
+          norm.setSampScale(norm.getSampScale() / scaleFactor);
+          norm.setLineOff((norm.getLineOff() / scaleFactor) + this.rowOffset);
+          norm.setSampOff((norm.getSampOff() / scaleFactor) + this.colOffset);
       }
 
       // now lets solve the coefficients

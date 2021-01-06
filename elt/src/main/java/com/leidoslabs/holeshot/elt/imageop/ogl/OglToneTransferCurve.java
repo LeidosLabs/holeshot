@@ -36,10 +36,15 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.URISyntaxException;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Consumer;
 
 import org.image.common.util.CloseableUtils;
+import org.locationtech.jts.geom.Coordinate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.leidoslabs.holeshot.elt.gpuimage.GLInternalFormat;
 import com.leidoslabs.holeshot.elt.gpuimage.HistogramType;
@@ -48,164 +53,217 @@ import com.leidoslabs.holeshot.elt.gpuimage.ShaderProgram;
 import com.leidoslabs.holeshot.elt.gpuimage.Texture;
 import com.leidoslabs.holeshot.elt.imagechain.Framebuffer;
 import com.leidoslabs.holeshot.elt.imageop.DynamicRangeAdjust;
+import com.leidoslabs.holeshot.elt.imageop.RawImage;
 import com.leidoslabs.holeshot.elt.imageop.ToneTransferCurve;
 import com.leidoslabs.holeshot.elt.imageop.ogl.ImageChainSettings.ImageSource;
+import com.leidoslabs.holeshot.elt.tileserver.TileserverImage;
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
 
 /**
  * Final OpenGL operation in Image Chain. Uses a sensor specific lookup table
  * to DRA'd pixels
  */
-public class OglToneTransferCurve extends OglAbstractImageOp implements ToneTransferCurve {
+public class OglToneTransferCurve extends OglAbstractImageOpPrimitive implements ToneTransferCurve {
+	private static final Logger LOGGER = LoggerFactory.getLogger(OglToneTransferCurve.class);
 
-   private ShaderProgram shader;
-   private Framebuffer toneCorrectedFramebuffer;
+	private static final String SHADER_KEY = OglToneTransferCurve.class.getName();
+	private Framebuffer toneCorrectedFramebuffer;
 
-   private Texture ttcTexture;
-   private QuadDrawVAO quadDrawVAO;
-   private ImageSource ttcImageSource;
-   private ImageChainSettings imageChainSettings;
+	private Texture ttcTexture;
+	private ImageSource ttcImageSource;
+	private ImageChainSettings imageChainSettings;
+	private boolean isResultFBExternallyManaged;
+	private float zOrder;
 
-   private static final Map<String, int[]> ttcCurves = new HashMap<String, int[]>();
+	private static final Map<String, int[]> ttcCurves = new HashMap<String, int[]>();
+	
+	public OglToneTransferCurve() {
+		this.isResultFBExternallyManaged = false;
+		setZOrder(0.0f);
+	}
 
-   public OglToneTransferCurve() {
-   }
+	@Override
+	public Framebuffer getResultFramebuffer() {
+		return this.toneCorrectedFramebuffer;
+	}
 
-   @Override
-   public Framebuffer getResultFramebuffer() {
-      return this.toneCorrectedFramebuffer;
-   }
+	public void setResultFramebuffer(Framebuffer resultFramebuffer) {
+		this.isResultFBExternallyManaged = (resultFramebuffer != null);
+		this.toneCorrectedFramebuffer = resultFramebuffer;
+	}
 
-   private Dimension getSize() {
-      return getResultFramebuffer().getSize();
-   }
+	private Dimension getSize() {
+		return getResultFramebuffer().getSize();
+	}
 
-   private int getWidth() {
-      return getSize().width;
-   }
+	/**
+	 * @return the zOrder
+	 */
+	public float getZOrder() {
+		return zOrder;
+	}
 
-   private int getHeight() {
-      return getSize().height;
-   }
+	/**
+	 * @param zOrder the zOrder to set
+	 */
+	public void setZOrder(float zOrder) {
+		this.zOrder = zOrder;
+	}
 
-   @Override
-   protected void doRender() throws IOException {
-      try {
-         initialize();
+	private int getWidth() {
+		return getSize().width;
+	}
 
-         toneCorrectedFramebuffer.clearBuffer();
+	private int getHeight() {
+		return getSize().height;
+	}
 
-         // Bind to the Equalized Image Buffer for Writing
-         toneCorrectedFramebuffer.bind();
+	@Override
+	protected void doRender() throws Exception {
+		try {
+			initialize();
 
-         glViewport(0, 0,  getWidth(), getHeight());
+			if (!isResultFBExternallyManaged) {
+				toneCorrectedFramebuffer.clearBuffer();
+			}
 
-         final DynamicRangeAdjust dra = getImageChain().getPreviousImageOp(this, OglDynamicRangeAdjust.class);
-         Framebuffer draFB = dra.getResultFramebuffer();
-         glActiveTexture(GL_TEXTURE1);
-         glBindTexture(GL_TEXTURE_2D, draFB.getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
-         glActiveTexture(GL_TEXTURE2);
-         this.ttcTexture.bind();
-         glActiveTexture(GL_TEXTURE0);
+			// Bind to the Equalized Image Buffer for Writing
+			toneCorrectedFramebuffer.bind();
 
-         shader.useProgram();
+			glViewport(0, 0,  getWidth(), getHeight());
+			
+			final DynamicRangeAdjust dra = getImageChain().getPreviousImageOp(this, OglDynamicRangeAdjust.class);
+			Framebuffer draFB = dra.getResultFramebuffer();
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D, draFB.getTexture().getId());
+			glActiveTexture(GL_TEXTURE0);
+			glActiveTexture(GL_TEXTURE2);
+			this.ttcTexture.bind();
+			glActiveTexture(GL_TEXTURE0);
 
-         // Set the texture that the vertex shader should read from
-         glUniform1i(shader.getUniformLocation("inputImage"), 1);
-         glUniform1i(shader.getUniformLocation("uTonalTransferSampler"), 2);
+			
+			ShaderProgram shader = getELTDisplayContext().getShader(SHADER_KEY, HistogramType.class, HistogramType.Shaders.PASSTHROUGH_ZORDER_VERTEX_SHADER, HistogramType.Shaders.TTC_SHADER);
 
-         glUniform2iv(shader.getUniformLocation("fbDim"), new int[] { draFB.getSize().width, draFB.getSize().height});
-         glUniform1i(shader.getUniformLocation("buckets"), getImage().getMaxPixelValue());
-         glUniform1i(shader.getUniformLocation("maxPixel"), getImage().getMaxPixelValue());
+			shader.useProgram();
 
-         glUniform1f(shader.getUniformLocation("ic_sub"), imageChainSettings.getSub());
-         glUniform1f(shader.getUniformLocation("ic_mul"), imageChainSettings.getMul());
-         glUniform1f(shader.getUniformLocation("ic_gamma"), imageChainSettings.getGamma());
+			// Set the texture that the vertex shader should read from
+			glUniform1i(shader.getUniformLocation("inputImage"), 1);
+			glUniform1i(shader.getUniformLocation("uTonalTransferSampler"), 2);
 
-         this.quadDrawVAO.draw();
+			glUniform2iv(shader.getUniformLocation("fbDim"), new int[] { draFB.getSize().width, draFB.getSize().height});
+			glUniform1i(shader.getUniformLocation("buckets"), getImage().getMaxPixelValue());
+			glUniform1i(shader.getUniformLocation("maxPixel"), getImage().getMaxPixelValue());
 
-         glUseProgram(0);
+			glUniform1f(shader.getUniformLocation("ic_sub"), imageChainSettings.getSub());
+			glUniform1f(shader.getUniformLocation("ic_mul"), imageChainSettings.getMul());
+			glUniform1f(shader.getUniformLocation("ic_gamma"), imageChainSettings.getGamma());
 
-      } catch (URISyntaxException e) {
-         throw new IOException(e);
-      } finally {
-         // Cleanup State
-         toneCorrectedFramebuffer.unbind();
-      }
+			glUniform1f(shader.getUniformLocation("zOrder"), zOrder);
+			
+			ImageWorld imageWorld = getImageWorld();
+			TileserverImage image = getImage();
+			
+			Coordinate[] clipBounds = imageWorld.getClipImage(image).getCoordinates();
+			final double[][] vertices = 
+					Arrays.stream(new int[] { 3, 0, 2, 1 })
+					.mapToObj(i->clipBounds[i])
+					.map(c->new double[] {c.getX(), c.getY(), 0.0})
+					.toArray(double[][]::new);
 
-   }
+			try (QuadDrawVAO vao = new QuadDrawVAO(vertices, 0)) {
+				vao.draw();
+			}
+			glUseProgram(0);
 
-   private void initialize() throws IOException, URISyntaxException {
-      final Dimension viewportDimensions = getViewportDimensions();
+		} catch (URISyntaxException e) {
+			throw new IOException(e);
+		} finally {
+			toneCorrectedFramebuffer.unbind();
+		}
+	}
 
-      if (toneCorrectedFramebuffer == null) {
-         toneCorrectedFramebuffer = new Framebuffer(getViewportDimensions(), GLInternalFormat.GlInternalFormatRGBA32F, getELTDisplayContext());
-         this.shader = new ShaderProgram(HistogramType.class, HistogramType.Shaders.PASSTHROUGH_VERTEX_SHADER, HistogramType.Shaders.TTC_SHADER);
-         this.quadDrawVAO = new QuadDrawVAO(QuadDrawVAO.FULL_UNIFORM_QUAD, 0);
-      } else if (!toneCorrectedFramebuffer.getSize().equals(viewportDimensions)) {
-         toneCorrectedFramebuffer.reset(viewportDimensions);
-      }
+	private void initialize() throws Exception {
+		final Dimension viewportDimensions = getViewportDimensions();
+
+		if (toneCorrectedFramebuffer == null) {
+			toneCorrectedFramebuffer = new Framebuffer(getViewportDimensions(), GLInternalFormat.GlInternalFormatRGBA32F, getELTDisplayContext());
+		} else if (!toneCorrectedFramebuffer.getSize().equals(viewportDimensions)) {
+			toneCorrectedFramebuffer.reset(viewportDimensions);
+		}
 
 
-      final ImageSource newImageSource = getImageSource();
-      if (ttcTexture == null || newImageSource != ttcImageSource) {
-         ttcImageSource = newImageSource;
-         resetManualAdjustments();
+		final ImageSource newImageSource = getImageSource();
+		if (ttcTexture == null || newImageSource != ttcImageSource) {
+			ttcImageSource = newImageSource;
+			resetManualAdjustments();
 
-         BufferedImage ttcImage = new BufferedImage(256, 256, BufferedImage.TYPE_USHORT_GRAY);
-         ttcImage.getRaster().setSamples(0, 0, 256, 256, 0, readTTCCurve());
-         this.ttcTexture = new Texture(new Dimension(256, 256), GLInternalFormat.GlInternalFormatR32FUS, GL_LINEAR, GL_CLAMP_TO_EDGE, getELTDisplayContext(), ttcImage);
-      }
-   }
-   private static synchronized int[] readTTCCurve(String ttcResourceName) throws IOException, URISyntaxException {
-      int[] ttcCurve = ttcCurves.get(ttcResourceName);
-      if (ttcCurve == null) {
-         try (BufferedReader buffer = new BufferedReader(new InputStreamReader(OglToneTransferCurve.class.getClassLoader().getResourceAsStream(ttcResourceName)))) {
-            ttcCurve = buffer.lines().map(String::trim)
-                  .filter(s -> s.length() > 0 && !s.equals("#") && s.charAt(0) != 'm' && !s.contains(" "))
-                  .mapToInt(s -> Integer.parseInt(s, 10)).toArray();
-            ttcCurves.put(ttcResourceName, ttcCurve);
-         }
-      }
-      return ttcCurve;
-   }
-   private int[] readTTCCurve() throws IOException, URISyntaxException {
-      return readTTCCurve(getTTCResourceName());
-   }
+			BufferedImage ttcImage = new BufferedImage(256, 256, BufferedImage.TYPE_USHORT_GRAY);
+			ttcImage.getRaster().setSamples(0, 0, 256, 256, 0, readTTCCurve());
+			this.ttcTexture = new Texture(new Dimension(256, 256), GLInternalFormat.GlInternalFormatR32FUS, GL_LINEAR, GL_CLAMP_TO_EDGE, getELTDisplayContext(), ttcImage);
+		}
+	}
+	private static synchronized int[] readTTCCurve(String ttcResourceName) throws IOException, URISyntaxException {
+		int[] ttcCurve = ttcCurves.get(ttcResourceName);
+		if (ttcCurve == null) {
+			try (BufferedReader buffer = new BufferedReader(new InputStreamReader(OglToneTransferCurve.class.getClassLoader().getResourceAsStream(ttcResourceName)))) {
+				ttcCurve = buffer.lines().map(String::trim)
+						.filter(s -> s.length() > 0 && !s.equals("#") && s.charAt(0) != 'm' && !s.contains(" "))
+						.mapToInt(s -> Integer.parseInt(s, 10)).toArray();
+				ttcCurves.put(ttcResourceName, ttcCurve);
+			}
+		}
+		return ttcCurve;
+	}
+	private int[] readTTCCurve() throws IOException, URISyntaxException {
+		return readTTCCurve(getTTCResourceName());
+	}
 
-   private String getTTCResourceName() {
-      final ImageChainSettings settings = ttcImageSource.getSettings();
-      return String.format("ttc/ttc_family_%d_16_to_16_%d.dat", settings.getTTCFamily(), settings.getTTCMember() );
-   }
+	private String getTTCResourceName() {
+		final ImageChainSettings settings = ttcImageSource.getSettings();
+		return String.format("ttc/ttc_family_%d_16_to_16_%d.dat", settings.getTTCFamily(), settings.getTTCMember() );
+	}
 
-   @Override
-   public void adjustBrightness(float d) {
-      imageChainSettings.adjustSub(d);
-   }
 
-   @Override
-   public void adjustContrast(float d) {
-      imageChainSettings.adjustMul(d);
-   }
+	@Override
+	public void adjustBrightness(float d) {
+		if (imageChainSettings != null) {
+			imageChainSettings.adjustSub(d);
+		}
+	}
 
-   @Override
-   public void adjustGamma(float d) {
-      imageChainSettings.adjustGamma(d);
-   }
+	@Override
+	public void adjustContrast(float d) {
+		if (imageChainSettings != null) {
+			imageChainSettings.adjustMul(d);
+		}
+	}
 
-   @Override
-   public void resetManualAdjustments() {
-      imageChainSettings = new ImageChainSettings(ttcImageSource.getSettings());
-   }
+	@Override
+	public void adjustGamma(float d) {
+		if (imageChainSettings != null) {
+			imageChainSettings.adjustGamma(d);
+		}
+	}
 
-   @Override
-   public void close() throws IOException {
-      super.close();
-      CloseableUtils.close(shader, toneCorrectedFramebuffer, ttcTexture, quadDrawVAO);
-   }
-   @Override
-   public void reset() {
-      clearFramebuffer(0.0f, 0.0f, 0.0f, 1.0f, toneCorrectedFramebuffer);
-   }
+	@Override
+	public void resetManualAdjustments() {
+		if (ttcImageSource != null) {
+			imageChainSettings = new ImageChainSettings(ttcImageSource.getSettings());
+		}
+	}
+
+	@Override
+	public void close() throws IOException {
+		super.close();
+		CloseableUtils.close(toneCorrectedFramebuffer, ttcTexture);
+
+		if (!isResultFBExternallyManaged) {
+			CloseableUtils.close(toneCorrectedFramebuffer);
+		}
+	}
+	@Override
+	public void reset() {
+		clearFramebuffer(0.0f, 0.0f, 0.0f, 0.0f, toneCorrectedFramebuffer);
+	}
 
 }

@@ -19,6 +19,6 @@ package com.leidoslabs.holeshot.elt.imageop;
 /**
  * Interface for SummedArea Operations
  */
-public interface SummedArea extends ImageOp {
+public interface SummedArea extends ImageOpPrimitive {
 
 }

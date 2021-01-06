@@ -160,5 +160,33 @@ public class RPCCameraModel extends CameraModel {
   @Override
   public long getSizeInBytes() {
     return super.getSizeInBytes() + CacheableUtil.getDefault().getSizeInBytesForObjects(rpcSample, rpcLine, normalization, error);
-  }  
+  }
+  
+  public RPCBTre getNitfRpcBTag() {
+     final NormalizationCoefficients norm = getNormalization();
+     final ErrorEstimate error = getError();
+     final RationalCameraPolynomial sample = getRpcSample();
+     final RationalCameraPolynomial line = getRpcLine();
+     
+     return new RPCBTre.Builder()
+           .setSuccess(true)
+           .setErrorBias(error.getBias())
+           .setErrorRand(error.getRandom())
+           .setLineOffset((int)norm.getLineOff())
+           .setSampleOffset((int)norm.getSampOff())
+           .setGeodeticLatOffset(norm.getLatOff())
+           .setGeodeticLonOffset(norm.getLonOff())
+           .setGeodeticHeightOffset((int)norm.getHtOff())
+           .setLineScale((int)norm.getLineScale())
+           .setSampleScale((int)norm.getSampScale())
+           .setGeodeticLatScale(norm.getLatScale())
+           .setGeodeticLonScale(norm.getLonScale())
+           .setGeodeticHeightScale((int)norm.getHtScale())
+           .setLineNumeratorCoeff(line.getNumerator().getCoefficients())
+           .setLineDenominatorCoeff(line.getDenominator().getCoefficients())
+           .setSampleNumeratorCoeff(sample.getNumerator().getCoefficients())
+           .setSampleDenomoniatorCoeff(sample.getDenominator().getCoefficients())
+           .build();
+  }
+  
 }

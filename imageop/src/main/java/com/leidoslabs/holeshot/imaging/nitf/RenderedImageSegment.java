@@ -44,6 +44,7 @@ import org.codice.imaging.nitf.core.image.ImageSegment;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Envelope;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.leidoslabs.holeshot.imaging.ImageKey;
 import com.leidoslabs.holeshot.imaging.ImageSourceSegment;
 import com.leidoslabs.holeshot.imaging.TileReader;
@@ -116,10 +117,12 @@ public class RenderedImageSegment implements RenderedImage, ImageSourceSegment {
    private Envelope getImageBounds() {
       return new Envelope(0.0, imageSegment.getNumberOfColumns(), 0.0, imageSegment.getNumberOfRows());
    }
-
-   private Coordinate[] getImageGeoBounds() {
+   
+   @JsonIgnore
+   public Coordinate[] getImageGeoBounds() {
       return toCoordinates(imageSegment.getImageCoordinates());
    }
+   
    private static Coordinate[] toCoordinates(ImageCoordinates imageCoords)
    {
       return new Coordinate[] {
@@ -459,10 +462,10 @@ public class RenderedImageSegment implements RenderedImage, ImageSourceSegment {
 
 
    @Override
-   public RenderedImage getRenderedImage() {
+   @JsonIgnore
+   public Object getSegmentMetadataObject() {
       return this;
    }
-
 
    @Override
    public Map<String, Object> getMetadata() {
@@ -479,6 +482,10 @@ public class RenderedImageSegment implements RenderedImage, ImageSourceSegment {
    public ImageKey getImageKey() {
       return this.imageKey;
    }
+   
+   public ImageSegment getImageSegment() {
+	   return this.imageSegment;
+   }
 
    @Override
    public void close() throws Exception {
@@ -486,14 +493,12 @@ public class RenderedImageSegment implements RenderedImage, ImageSourceSegment {
 
    }
 
-
-   @Override
-   public Object getSegmentMetadataObject() {
-      return this.imageSegment;
-   }
-
-
    public void setCameraModel(CameraModel cameraModel) {
       this.cameraModel = cameraModel;
+   }
+
+   @Override
+   public RenderedImage getRenderedImage() {
+	   return this;
    }
 }

@@ -16,7 +16,6 @@
 
 package com.leidoslabs.holeshot.chipper.jaxrs;
 
-import java.awt.Dimension;
 import java.util.Arrays;
 
 import javax.ws.rs.ext.ParamConverter;

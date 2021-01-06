@@ -21,6 +21,8 @@ import java.awt.image.BufferedImage;
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
@@ -59,8 +61,7 @@ public class TileserverTileCache {
    private static final TileserverTileCache instance = new TileserverTileCache();
    private Cache<String, byte[]> imageCache;
    private Cache<String, TilePyramidDescriptor> tilePyramidDescriptorCache;
-
-
+   
    public static TileserverTileCache getInstance() {
       return instance;
    }
@@ -80,25 +81,19 @@ public class TileserverTileCache {
 
    private <T> T getFromCache(Cache<String, T> cache, String key) {
       T value;
-      synchronized (cache) {
          value = cache.get(key);
-      }
       return value;
    }
 
    private <T> void setCache(Cache<String, T> cache, String key, T value) {
-      synchronized(cache) {
          if (value == null) {
             removeFromCache(cache, key);
          } else {
             cache.put(key, value);
          }
-      }
    }
    private <T> void removeFromCache(Cache<String, T> cache, String key) {
-      synchronized(cache) {
          cache.remove(key);
-      }
    }
    private InputStream tileInputStream(ImageTileFetcher tileFetcher, TileRef tileRef, byte[] givenImageBytes) throws IOException {
       final String key = tileRef.getKey();
@@ -185,15 +180,20 @@ public class TileserverTileCache {
       return getTileserverTileForBand(tileFetcher, tileRef, false);
    }
    
+   public CoreImage getTileserverTileForBand(ImageTileFetcher tileFetcher, TileRef tileRef, boolean waitForResult) throws IOException {
+	   return getTileserverTileForBand(tileFetcher, tileRef, waitForResult, false);
+   }
+   
    /**
     * If we've already fetched the tile return it, otherwise put in a request to fetch it and return null
     * @param tileFetcher
     * @param tileRef
     * @param waitForResult if tile is not in cache, wait for executor task to finish
+    * @param minPriority When true, if tile image is not in cache, then fetch task is put on the bottom of executor's stack
     * @return
     * @throws IOException
     */
-   public CoreImage getTileserverTileForBand(ImageTileFetcher tileFetcher, TileRef tileRef, boolean waitForResult) throws IOException {
+   public CoreImage getTileserverTileForBand(ImageTileFetcher tileFetcher, TileRef tileRef, boolean waitForResult, boolean minPriority) throws IOException {
       CoreImage result = null;
       Future<?> future = null;
       final String tileKey = tileRef.getKey();
@@ -203,30 +203,34 @@ public class TileserverTileCache {
          if (imageBytes != null) {
             result = readImage(tileFetcher, tileRef, imageBytes);
          } else {
-            future = executorService.submit(tileKey, () -> {
-               try {
-                  System.out.println("waitingForLock " + tileRef.toString());
-                  synchronized (tileKey.intern()) {
-                     System.out.println("readImage " + tileRef.toString());
-                     readImage(tileFetcher, tileRef, null);
-                  }
-               } catch (IOException e) {
-                  LOGGER.error("error reading " + tileKey);
-                  e.printStackTrace();
-               }
-            });
+        	 if (!executorService.isInProcess(tileKey)) {
+        		 Runnable tileTask = () -> {
+        		      synchronized (tileKey.intern()) {
+        		    	  if (!imageCache.containsKey(tileKey)) {
+        		    		  try {
+        		    			  readImage(tileFetcher, tileRef, null);
+        		    		  } catch (IOException e) {
+        		    			  LOGGER.error("error reading " + tileKey);
+        		    			  e.printStackTrace();
+        		    		  }
+        		    	  }
+        		      }
+        		 };
+        		 if (minPriority) {
+        			 future = executorService.submit(tileKey, tileTask, Long.MIN_VALUE);
+        		 }
+        		 else {
+        			 future = executorService.submit(tileKey, tileTask);
+        		 }
+        	 }
          }
       }
       if (waitForResult && future != null) {
          try {
-            System.out.println("Waiting for future");
             future.get();
-            System.out.println("Done Waiting for future");
 
             // Get the result from the cache.
-            System.out.println("Getting result from cache");
             result = getTileserverTileForBand(tileFetcher, tileRef, false);
-            System.out.println("Done getting result from cache");
 
          } catch (InterruptedException | ExecutionException e) {
             e.printStackTrace();
@@ -245,7 +249,7 @@ public class TileserverTileCache {
     */
    @SuppressWarnings("unchecked")
    public TilePyramidDescriptor getTilePyramidDescriptor(TileServerClient tileServerClient, String collectionID, String timestamp) throws IOException {
-      String key = getTileDescriptorKey(collectionID, timestamp);
+      final String key = getTileDescriptorKey(collectionID, timestamp);
       TilePyramidDescriptor result = null;
       synchronized (key.intern()) {
          result = getFromCache(tilePyramidDescriptorCache, key);

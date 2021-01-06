@@ -17,8 +17,13 @@
 package com.leidoslabs.holeshot.elt.imageop;
 
 import java.io.IOException;
+import java.util.function.Consumer;
 
+import com.leidoslabs.holeshot.elt.ELTDisplayContext;
+import com.leidoslabs.holeshot.elt.Interpolation;
 import com.leidoslabs.holeshot.elt.gpuimage.HistogramType;
+import com.leidoslabs.holeshot.elt.tileserver.TileserverImage;
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
 
 /**
  * Factory pattern for ImageOp
@@ -27,8 +32,12 @@ public interface ImageOpFactory {
   public CumulativeHistogram cumulativeHistogram();
   public DynamicRangeAdjust dynamicRangeAdjust();
   public Histogram histogram(HistogramType histogramType);
+  public RawImage rawImage(TileserverImage image, boolean progressiveRender);
   public RawImage rawImage(boolean progressiveRender);
+  public Interpolated interpolated(Interpolation interpolation);
   public SummedArea summedArea();
   public DRAParameters draParameters(boolean phasedDRA);
   public ToneTransferCurve toneTransferCurve() throws IOException;
+  
+  public Mosaic mosaic(ImageWorld imageWorld, ELTDisplayContext displayContext, Consumer<Mosaic> initializeCallback);
 }

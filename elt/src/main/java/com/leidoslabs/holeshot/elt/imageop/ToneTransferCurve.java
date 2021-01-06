@@ -19,7 +19,7 @@ package com.leidoslabs.holeshot.elt.imageop;
 /**
  * Interface for ToneTransferCurve Operations
  */
-public interface ToneTransferCurve extends ImageOp {
+public interface ToneTransferCurve extends ImageOpPrimitive {
    public void adjustBrightness(float d);
    public void adjustContrast(float d);
    public void adjustGamma(float d);

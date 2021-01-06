@@ -34,7 +34,7 @@ public class PingPongFramebuffer  implements Closeable {
    private Framebuffer[] buffers;
    private int sourceIndex;
 
-   public PingPongFramebuffer(Dimension size, GLInternalFormat internalFormat, ELTDisplayContext eltDisplayContext) throws IOException {
+   public PingPongFramebuffer(Dimension size, GLInternalFormat internalFormat, ELTDisplayContext eltDisplayContext) throws Exception {
       sourceIndex = 0;
       buffers = new Framebuffer[] {
             new Framebuffer(size, internalFormat, eltDisplayContext),
@@ -42,7 +42,7 @@ public class PingPongFramebuffer  implements Closeable {
       };
    }
 
-   public PingPongFramebuffer(Dimension size, GLInternalFormat internalFormat, ELTDisplayContext eltDisplayContext, int filter, int wrap) throws IOException {
+   public PingPongFramebuffer(Dimension size, GLInternalFormat internalFormat, ELTDisplayContext eltDisplayContext, int filter, int wrap) throws Exception {
       sourceIndex = 0;
       buffers = new Framebuffer[] {
             new Framebuffer(size, internalFormat, eltDisplayContext, filter, wrap),

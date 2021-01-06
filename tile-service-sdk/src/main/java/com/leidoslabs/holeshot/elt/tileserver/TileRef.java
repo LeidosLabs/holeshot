@@ -18,18 +18,20 @@ package com.leidoslabs.holeshot.elt.tileserver;
 import java.awt.Dimension;
 import java.awt.Rectangle;
 import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Comparator;
 import java.util.List;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import org.image.common.cache.CacheableUtil;
 import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Polygon;
+import org.locationtech.spatial4j.shape.impl.RectangleImpl;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -89,6 +91,18 @@ public class TileRef extends AbstractTileRef<TileRef> {
       }
       return parentTile;
    }
+   
+   public TileRef getBorderTile(int xOffset, int yOffset) {
+	   TileRef result = null;
+	   Dimension numTiles = this.getRowsAndColumnsForRset(getRset());
+	   int tileX = getX() + xOffset;
+	   int tileY = getY() + yOffset;
+	   
+	   if (tileX >= 0 && tileX < numTiles.width && tileY >= 0 && tileY < numTiles.height) {
+		   result = new TileRef(image, getRset(), tileX, tileY);
+	   }
+	   return result;
+   }
 
    /**
     * Dimensions of next rset (rset - 1) in tiles
@@ -139,7 +153,7 @@ public class TileRef extends AbstractTileRef<TileRef> {
             .map(c-> image.getCameraModel().imageToWorld(GeometryUtils.toPoint(c)))
             .toArray(Coordinate[]::new);
 
-      return image.getGeometryFactory().createPolygon(geoCoordinates);
+      return GeometryUtils.GEOMETRY_FACTORY.createPolygon(geoCoordinates);
    }
 
    /**
@@ -147,22 +161,17 @@ public class TileRef extends AbstractTileRef<TileRef> {
     */
    public Polygon getImageSpaceBounds() {
       Rectangle r0Rect = getR0RectInImageSpace();
-      Coordinate ll = new Coordinate(r0Rect.getMinX(), r0Rect.getMinY());
-      Coordinate lr = new Coordinate(r0Rect.getMaxX(), r0Rect.getMinY());
-      Coordinate ur = new Coordinate(r0Rect.getMaxX(), r0Rect.getMaxY());
-      Coordinate ul = new Coordinate(r0Rect.getMinX(), r0Rect.getMaxY());
+      
+      Coordinate ll = new Coordinate(r0Rect.getMinX(), r0Rect.getMinY(), 0.0);
+      Coordinate lr = new Coordinate(r0Rect.getMaxX()-1, r0Rect.getMinY(), 0.0);
+      Coordinate ur = new Coordinate(r0Rect.getMaxX()-1, r0Rect.getMaxY()-1, 0.0);
+      Coordinate ul = new Coordinate(r0Rect.getMinX(), r0Rect.getMaxY()-1, 0.0);
 
-      Polygon imageBounds = image.getGeometryFactory().createPolygon(new Coordinate[] {
+      // Other pieces of the code depend on this order.  Don't change it without checking out it's usage.
+      Polygon imageBounds = GeometryUtils.GEOMETRY_FACTORY.createPolygon(new Coordinate[] {
             ll, lr, ur, ul, ll
       });
       return imageBounds;
-   }
-
-   /**
-    * @return Get tile's bounds in openGL space (imageSpaceBounds normalized to [-1, 1] plus an offset)
-    */
-   public Polygon getOpenGLSpaceBounds() {
-      return image.imageToOpenGL(getImageSpaceBounds());
    }
 
    /**
@@ -172,9 +181,11 @@ public class TileRef extends AbstractTileRef<TileRef> {
       final ImageScale tileScale = ImageScale.forRset(getRset());
       final Point2D tileDim = new Point2D.Double(getWidth(), getHeight());
       final Point2D tileDimR0 = tileScale.scaleUpToR0(tileDim);
-      final int tileWidth = (int)tileDimR0.getX();
-      final int tileHeight = (int)tileDimR0.getY();
+      final int tileWidth = (int)Math.round(tileDimR0.getX());
+      final int tileHeight = (int)Math.round(tileDimR0.getY());
       Rectangle fullTile = new Rectangle(getX()*tileWidth, getY()*tileHeight, tileWidth, tileHeight);
+      
+//      System.out.println("fullTile == " + fullTile.toString());
 
       return fullTile;
    }
@@ -279,6 +290,14 @@ public class TileRef extends AbstractTileRef<TileRef> {
       return allTiles;
    }
 
+   public Coordinate getGeodeticCenter() {
+	   return GeometryUtils.toCoordinate(this.getGeodeticBounds().getCentroid());   
+   }
+   
+   public double getGSD() {
+	   return image.getGSD(getGeodeticCenter(), this.getRset());
+   }
+   
    @Override
    public String toString() {
       return String.format("%d (%d, %d) - %d", getRset(), getX(), getY(), getBand());
@@ -320,6 +339,10 @@ public class TileRef extends AbstractTileRef<TileRef> {
     */
    public CoreImage getTileImage() throws IOException {
       return image.getTileserverTile(this);
+   }
+   
+   public CoreImage getTileImageMinPriority() throws IOException {
+	      return image.getTileserverTile(this, true);
    }
 
 }

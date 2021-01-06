@@ -1,7 +1,14 @@
 #!/bin/bash
 
-export TILESERVER="tileserver.leidoslabs.com"
-export TGTDIR="offline_cache/$TILESERVER/tileserver"
-mkdir -p $TGTDIR
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 
-aws s3 sync s3://advanced-analytics-geo-tile-images $TGTDIR
+$DIR/lsImages $1 |
+sed 's#"\([^/]*\)/.*",#\1#' |
+while read IMAGE
+do
+   TILESERVER="tileserver.leidoslabs.com"
+   TGTDIR="offline_cache/$TILESERVER/tileserver/$IMAGE"
+#   mkdir -p $TGTDIR
+
+   echo aws s3 sync s3://advanced-analytics-geo-tile-images/$IMAGE $TGTDIR
+done

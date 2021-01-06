@@ -1,0 +1,368 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  To deploy the dev stack use `sam deploy`
+  To deploy the primary stack use `sam deploy --config-env primary`
+  To deploy a custom stack, edit the file samconfig.toml to add your stack
+
+Parameters:
+  ElasticsearchEndpoint:
+    Description: Analytics elasticsearch VPC endpoint
+    Type: String
+  StackSuffix:
+    Description: The suffix that will be appended to all artifact names in the stack
+    Default: dev
+    Type: String
+  RolePermissionsBoundary:
+    Description: The DeveloperPolicy for creating IAM Roles
+    Type: String
+  Subnet:
+    Description: Subnet for the lambda functions
+    Type: String
+  SecurityGroup:
+    Description: Security group for the lambda functions
+    Type: String
+  ApiKeyId:
+    Description: Optional, API Key ID if you want to attach an existing one, else use 'None'
+    Type: String
+  ParentDNSName:
+    Description: The Parent Domainname to attach this stack to
+    Type: String
+  HostedZoneCertificateArn:
+    Description: The ARN to the Parent Domain's Certificate
+    Type: String
+  PublicZoneId:
+    Description: The Route53 Public Zone
+    Type: AWS::Route53::HostedZone::Id
+  PrivateZoneId:
+    Description: The Route53 Public Zone
+    Type: AWS::Route53::HostedZone::Id
+  PrimaryStack:
+    Description: true or false, this stack should be assigned the primary url
+    Default: 'false'
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    ConstraintDescription: true or false
+  IpWhitelist:
+    Description: Comma delimited list of IPs to whitelist in API Gateway Resource Policy
+    Type: CommaDelimitedList
+  DevApiKeyValue:
+    Description: >
+      You can specify a specific API Key string so that you can keep your dev key the same between tear downs.
+      Must be unique among other keys. Must be at least 20 characters. Specify 'None' or leave blank to skip this.
+    Type: String
+    Default: None
+
+Globals:
+  Function:
+    VpcConfig:
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      SubnetIds:
+        - !Ref Subnet
+    MemorySize: 512
+    Timeout: 20
+    Environment:
+      Variables:
+        ELASTICSEARCH_URL: !Ref ElasticsearchEndpoint
+
+Conditions:
+  IsPrimaryStack: !Equals [ !Ref PrimaryStack, 'true' ]
+  ProvidedExistingApiKey: !Not [!Equals [ !Ref ApiKeyId, 'None' ]]
+  ProvidedNewApiKeyString: !Not [!Equals [ !Ref DevApiKeyValue, 'None' ]]
+
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub AADev-RequestAnalyticsLambdaRole-${StackSuffix}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          Effect: Allow
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      PermissionsBoundary: !Ref RolePermissionsBoundary
+
+  CacheListTopic:
+    Type: AWS::SNS::Topic
+    Properties:
+      DisplayName: !Sub advanced-analytics-cachelist-topic-${StackSuffix}
+      TopicName: !Sub advanced-analytics-cachelist-topic-${StackSuffix}
+
+  CacheListTopicPolicy:
+    Type: AWS::SNS::TopicPolicy
+    Properties:
+      Topics:
+        - !Ref CacheListTopic
+      PolicyDocument:
+        Version: '2008-10-17'
+        Id: !Sub AADev-CacheListTopicPolicy-${StackSuffix}
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action:
+              - SNS:GetTopicAttributes
+              - SNS:SetTopicAttributes
+              - SNS:AddPermission
+              - SNS:RemovePermission
+              - SNS:DeleteTopic
+              - SNS:Subscribe
+              - SNS:ListSubscriptionsByTopic
+              - SNS:Publish
+              - SNS:Receive
+            Resource: !Ref CacheListTopic
+
+  WarehouseApi:
+    Type: AWS::Serverless::Api
+    DependsOn: CacheListTopic
+    Properties:
+      Name: !Sub analytics-warehouse-api-${StackSuffix}
+      StageName: dev
+      Auth:
+        ApiKeyRequired: true
+        ResourcePolicy:
+          IpRangeWhitelist: !Ref IpWhitelist
+        UsagePlan:
+          Description: Usage Plan across Firehose API Resources
+          CreateUsagePlan: SHARED
+          UsagePlanName: !Sub TelemetryPlan-${StackSuffix}
+      Domain:
+        CertificateArn: !Ref HostedZoneCertificateArn
+        DomainName: !If
+          - IsPrimaryStack
+          - !Sub analytics-warehouse.${ParentDNSName}
+          - !Sub analytics-warehouse-${StackSuffix}.${ParentDNSName}
+        EndpointConfiguration: REGIONAL
+        Route53:
+          HostedZoneId: !Ref PublicZoneId
+      EndpointConfiguration:
+        Type: REGIONAL
+
+  PrivateDomainRecordSet:
+    Type: AWS::Route53::RecordSet
+    DependsOn: WarehouseApi
+    Properties:
+      Type: A
+      HostedZoneId: !Ref PrivateZoneId
+      Name: !If
+        - IsPrimaryStack
+        - !Sub analytics-warehouse.${ParentDNSName}
+        - !Sub analytics-warehouse-${StackSuffix}.${ParentDNSName}
+      AliasTarget:
+        DNSName: !GetAtt WarehouseApi.DomainName.RegionalDomainName
+        HostedZoneId: !GetAtt WarehouseApi.DomainName.RegionalHostedZoneId
+        EvaluateTargetHealth: false
+
+  ProvidedExistingAPIUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    DependsOn: WarehouseApi
+    Condition: ProvidedExistingApiKey
+    Properties:
+      KeyId: !Ref ApiKeyId
+      KeyType: API_KEY
+      UsagePlanId: !Ref WarehouseApi.UsagePlan
+
+  WarehouseApiKey:
+    Condition: ProvidedNewApiKeyString
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Description: A specified key to use with the warehouse
+      Name: !Sub Warehouse-Api-Key-${StackSuffix}
+      Enabled: True
+      Value: !Ref DevApiKeyValue
+
+  ProvidedNewAPIUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    DependsOn: WarehouseApi
+    Condition: ProvidedNewApiKeyString
+    Properties:
+      KeyId: !Ref WarehouseApiKey
+      KeyType: API_KEY
+      UsagePlanId: !Ref WarehouseApi.UsagePlan
+
+  GetSummariesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar # note if you use a function in CodeUri SAMCLI will assume its of the s3 bucket/key type
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.GetSummariesHandler::handleRequest
+      Runtime: java8
+      Events:
+        GetOrder:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /summaries/search
+            Method: get
+
+  GetUsersFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar # note if you use a function in CodeUri SAMCLI will assume its of the s3 bucket/key type
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.GetUsersHandler::handleRequest
+      Runtime: java8
+      Events:
+        GetOrder:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /users
+            Method: get
+            
+  PostCacheListFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.PostCacheListHandler::handleRequest
+      Runtime: java8
+      Events:
+        GetOrders:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /cachelist
+            Method: post
+            
+  GetCacheListFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.GetCacheListHandler::handleRequest
+      Runtime: java8
+      Events:
+        GetOrders:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /cachelist
+            Method: get
+            
+  UpdateAOIHookHandlerFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.UpdateAOIHookHandler::handleRequest
+      Runtime: java8
+      Environment:
+        Variables:
+          TOPIC_ARN: !Ref CacheListTopic
+      Events:
+        GetOrders:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /updatelist
+            Method: get
+            
+  PostAOIFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.PostAOIHandler::handleRequest
+      Runtime: java8
+      Events:
+        GetOrders:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /aoi
+            Method: post
+            
+  GetAOIFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.GetAOIHandler::handleRequest
+      Runtime: java8
+      Events:
+        GetOrders:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /aoi
+            Method: get
+
+  PostSummariesFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.PostSummariesHandler::handleRequest
+      Runtime: java8
+      Events:
+        GetOrders:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /summaries
+            Method: post
+
+  PostScoresFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/analytics-warehouse-0.2.jar
+      Handler:  com.leidoslabs.holeshot.analytics.warehouse.api.handler.PostScoresHandler::handleRequest
+      Runtime: java8
+      Events:
+        UpdateOrder:
+          Type: Api
+          Properties:
+            RestApiId: !Ref WarehouseApi
+            Path: /tilescores
+            Method: post
+
+Outputs:
+  WarehouseApiEndpoint:
+    Description: "API Gateway endpoint URL"
+    Value: !Sub "https://${WarehouseApi}.execute-api.${AWS::Region}.amazonaws.com/dev/"
+
+  GetSummariesFunction:
+    Description: "GetSummaries Lambda Function ARN"
+    Value: !GetAtt GetSummariesFunction.Arn
+
+  PostSummariesFunction:
+    Description: "PostSummaries Lambda Function ARN"
+    Value: !GetAtt PostSummariesFunction.Arn
+    
+  GetUsersFunction:
+    Description: "GetUsers Lambda Function ARN"
+    Value: !GetAtt GetUsersFunction.Arn
+
+  PostScoresFunction:
+    Description: "PostScores Lambda Function ARN"
+    Value: !GetAtt PostScoresFunction.Arn
+    
+  PostAOIFunction:
+    Description: "PostScores Lambda Function ARN"
+    Value: !GetAtt PostAOIFunction.Arn
+    
+  GetAOIFunction:
+    Description: "PostScores Lambda Function ARN"
+    Value: !GetAtt GetAOIFunction.Arn
+    
+  CacheListTopic:
+    Description: "CacheListTopic ARN"
+    Value: !Ref CacheListTopic
+    
+  UpdateAOIHookHandlerFunction:
+    Description: "UpdateAOIHookHandler Function ARN"
+    Value: !GetAtt UpdateAOIHookHandlerFunction.Arn
+    

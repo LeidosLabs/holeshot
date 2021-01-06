@@ -16,13 +16,22 @@
 
 package com.leidoslabs.holeshot.chipper;
 
-import com.leidoslabs.holeshot.tileserver.v1.TileServerClientBuilder;
+import java.io.File;
+import java.util.EnumSet;
+
+import javax.servlet.DispatcherType;
+
 import org.apache.commons.daemon.Daemon;
 import org.apache.commons.daemon.DaemonContext;
 import org.apache.commons.daemon.DaemonInitException;
 import org.apache.commons.daemon.support.DaemonLoader;
 import org.apache.log4j.PropertyConfigurator;
-import org.eclipse.jetty.server.*;
+import org.eclipse.jetty.server.Connector;
+import org.eclipse.jetty.server.HttpConfiguration;
+import org.eclipse.jetty.server.HttpConnectionFactory;
+import org.eclipse.jetty.server.NCSARequestLog;
+import org.eclipse.jetty.server.Server;
+import org.eclipse.jetty.server.ServerConnector;
 import org.eclipse.jetty.servlet.DefaultServlet;
 import org.eclipse.jetty.servlet.FilterHolder;
 import org.eclipse.jetty.servlet.ServletContextHandler;
@@ -30,12 +39,11 @@ import org.eclipse.jetty.servlet.ServletHolder;
 import org.eclipse.jetty.util.thread.QueuedThreadPool;
 import org.glassfish.jersey.server.ResourceConfig;
 import org.glassfish.jersey.servlet.ServletContainer;
+import org.lwjgl.glfw.GLFWErrorCallback;
 import org.slf4j.ext.XLogger;
 import org.slf4j.ext.XLoggerFactory;
 
-import javax.servlet.DispatcherType;
-import java.io.File;
-import java.util.EnumSet;
+import com.leidoslabs.holeshot.tileserver.v1.TileServerClientBuilder;
 
 /**
  * Jetty ImageChipperServer, stands up REST API for image chipper. Runs as Daemon
@@ -101,6 +109,8 @@ public class ImageChipperServer implements Daemon {
          if (logConfig != null) {
             PropertyConfigurator.configure(logConfig);
          }
+         
+//         GLFWErrorCallback.createPrint(System.err).set();
 
          GraphicsContext.createGCLibraryInitializer().initializeGL();
          ImageChipper.initializePool();

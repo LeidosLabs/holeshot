@@ -17,67 +17,50 @@
 package com.leidoslabs.holeshot.chipper.wms;
 
 import java.awt.Dimension;
-import java.io.FileNotFoundException;
-import java.io.IOException;
-import java.io.OutputStream;
-import java.net.MalformedURLException;
 import java.net.URL;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
-import javax.ws.rs.WebApplicationException;
-import javax.ws.rs.core.MediaType;
 import javax.ws.rs.core.Response;
 import javax.ws.rs.core.StreamingOutput;
-import javax.ws.rs.core.Response.Status;
 
+import org.locationtech.jts.geom.Envelope;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import com.leidoslabs.holeshot.chipper.ImageChipper;
-import org.locationtech.jts.geom.Envelope;
+import com.leidoslabs.holeshot.chipper.request.ChipGeoEnvelopeRequest;
+import com.leidoslabs.holeshot.chipper.request.ChipRequest;
 
 public class GetMapRequestHandler {
-   private static final Logger LOGGER = LoggerFactory.getLogger(GetMapRequestHandler.class);
+	private static final Logger LOGGER = LoggerFactory.getLogger(GetMapRequestHandler.class);
 
-   public GetMapRequestHandler() {
-   }
-   /**
-    * User ImageChipper to respond to a WMS getMapRequest. 
-    * @param getMapRequest WMS get map request, providing bounding box and output dimension
-    * @return Chipped Image as a JAX RS response
-    * @throws Exception
-    */
-   public Response getResponse(GetMapRequest getMapRequest) throws Exception {
-      Response response = null;
-      final List<String> layers = getMapRequest.getLayers();
+	public GetMapRequestHandler() {
+	}
 
-      if (layers != null && layers.size() > 0) {
-         URL firstLayer = new URL(layers.get(0));
-         final double[] bbox = getMapRequest.getBbox();
+	/**
+	 * User ImageChipper to respond to a WMS getMapRequest.
+	 * 
+	 * @param getMapRequest WMS get map request, providing bounding box and output
+	 *                      dimension
+	 * @return Chipped Image as a JAX RS response
+	 * @throws Exception
+	 */
+	public Response getResponse(GetMapRequest getMapRequest) throws Exception {
+		Response response = null;
+		final List<String> layers = getMapRequest.getLayers();
 
-         if (bbox != null && bbox.length == 4) {
-            final Envelope bboxEnvelope = new Envelope(bbox[0],bbox[2],bbox[1],bbox[3]);
-            final Dimension outputDim = new Dimension(getMapRequest.getWidth(), getMapRequest.getHeight());
+		if (layers != null && layers.size() > 0) {
+			URL firstLayer = new URL(layers.get(0));
+			final double[] bbox = getMapRequest.getBbox();
 
-            StreamingOutput stream = new StreamingOutput() {
-               public void write(OutputStream os) throws IOException, WebApplicationException {
-                  try (ImageChipper chipper = ImageChipper.borrow(firstLayer)) {
-                     LOGGER.debug("chipByGeo " + bboxEnvelope.toString() + " " + outputDim.toString());
-                     chipper.chipByGeo(bboxEnvelope, outputDim, os, true, false );
-                  } catch (IllegalArgumentException e) {
-                     throw new WebApplicationException(Response.status(Status.BAD_REQUEST).build());
-                  } catch (FileNotFoundException e) {
-                     throw new WebApplicationException(Response.status(Status.NOT_FOUND).build());
-                  } catch (Exception e) {
-                     LOGGER.error(e.getMessage(), e);
-                     throw new WebApplicationException(Response.serverError().build());
-                  }
-               }
-            };
-            response = Response.ok(stream, "image/png").build();
-         }
-      }
-      return response;
-   }
+			if (bbox != null && bbox.length == 4) {
+				final Envelope bboxEnvelope = new Envelope(bbox[0], bbox[2], bbox[1], bbox[3]);
+				final Dimension outputDim = new Dimension(getMapRequest.getWidth(), getMapRequest.getHeight());
+
+				ChipRequest req = new ChipGeoEnvelopeRequest(firstLayer, bboxEnvelope, outputDim, false);
+				StreamingOutput stream = req.getChip();
+				response = Response.ok(stream, "image/png").build();
+			}
+		}
+		return response;
+	}
 }

@@ -113,16 +113,16 @@ public class DGTiffTilePyramidBuilder extends MultiPartTilePyramidBuilder {
    @Override
    public void buildTilePyramid(String name) throws TilePyramidException {
       final PyramidMetadata metadata = buildMetadata(name);
-      String stage = "metadata";
+      String stage = "imagetiles";
       try {
-         final ImageKey imageKey = getImageKey();
-         listener.handleMetadata(imageKey, metadata.getTilePyramidDescriptor());
-
-         stage = "imagetiles";
          buildTiles(name, metadata);
 
+         final ImageKey imageKey = getImageKey();
          stage = "MRF";
          listener.handleMRF(imageKey);
+         
+         stage = "metadata";
+         listener.handleMetadata(imageKey, metadata.getTilePyramidDescriptor());
       } catch (Exception e) {
          throw new TilePyramidException(String.format("Unable to process %s through callback", stage), e);
       }

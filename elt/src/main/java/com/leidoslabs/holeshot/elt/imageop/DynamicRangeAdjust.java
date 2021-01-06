@@ -19,6 +19,6 @@ package com.leidoslabs.holeshot.elt.imageop;
 /**
  * Interface for DRA ImageOp
  */
-public interface DynamicRangeAdjust extends ImageOp {
+public interface DynamicRangeAdjust extends ImageOpPrimitive {
 
 }

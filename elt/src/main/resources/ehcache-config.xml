@@ -15,7 +15,7 @@
 	</cache>
 	<cache alias="TEXTURE_CACHE">
 		<key-type>java.lang.String</key-type>
-		<value-type>com.leidoslabs.holeshot.elt.ELTImageTexture</value-type>
+		<value-type>com.leidoslabs.holeshot.elt.gpuimage.Texture</value-type>
 		<expiry>
 			<tti unit="minutes">5</tti>
 		</expiry>
@@ -28,7 +28,19 @@
 			<tti unit="days">7</tti>
 		</expiry>
 		<resources>
+		    <heap unit="entries">50</heap>
 			<disk unit="GB" persistent="true">100</disk>
+		</resources>
+	</cache>
+	<cache alias="OSM_TILE_CACHE">
+		<key-type>java.lang.String</key-type>
+		<value-type>[B</value-type>
+		<expiry>
+			<tti unit="days">7</tti>
+		</expiry>
+		<resources>
+		    <heap unit="entries">50</heap>
+			<disk unit="GB" persistent="true">1</disk>
 		</resources>
 	</cache>
 </config>

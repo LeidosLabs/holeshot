@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+        <artifactId>holeshot</artifactId>
+        <groupId>com.leidoslabs.holeshot</groupId>
+        <version>0.2</version>
+        <relativePath>../pom.xml</relativePath>
+    </parent>
+
+    <artifactId>analytics</artifactId>
+    <modelVersion>4.0.0</modelVersion>
+    <packaging>pom</packaging>
+
+    <name>holeshot-analytics</name>
+
+    <modules>
+        <module>analytics-common</module>
+        <module>log-mapreduce</module>
+        <module>cache-prioritization</module>
+        <module>analytics-warehouse</module>
+    </modules>
+
+    <dependencyManagement>
+        <dependencies>
+            <dependency>
+                <groupId>com.leidoslabs.holeshot.analytics</groupId>
+                <artifactId>analytics-common</artifactId>
+                <version>${leidosimaging.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.leidoslabs.holeshot.analytics</groupId>
+                <artifactId>log-mapreduce</artifactId>
+                <version>${leidosimaging.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.leidoslabs.holeshot.analytics</groupId>
+                <artifactId>cache-prioritization</artifactId>
+                <version>${leidosimaging.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.leidoslabs.holeshot.analytics</groupId>
+                <artifactId>analytics-warehouse</artifactId>
+                <version>${leidosimaging.version}</version>
+            </dependency>
+        </dependencies>
+    </dependencyManagement>
+
+</project>

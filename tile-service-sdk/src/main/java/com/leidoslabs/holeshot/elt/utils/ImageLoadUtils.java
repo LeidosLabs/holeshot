@@ -77,7 +77,8 @@ public class ImageLoadUtils {
     * @throws IOException
     */
    public BufferedImage loadImage(InputStream inputStream) throws IOException {
-      return ImageIO.read(inputStream);
+      BufferedImage result = ImageIO.read(inputStream);
+      return result;
    }
 }
 

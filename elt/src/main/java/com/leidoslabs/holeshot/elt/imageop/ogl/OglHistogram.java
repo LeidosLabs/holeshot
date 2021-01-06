@@ -69,14 +69,15 @@ import com.leidoslabs.holeshot.elt.gpuimage.ShaderProgram;
 import com.leidoslabs.holeshot.elt.gpuimage.VertexArrayObject;
 import com.leidoslabs.holeshot.elt.imagechain.Framebuffer;
 import com.leidoslabs.holeshot.elt.imageop.Histogram;
-import com.leidoslabs.holeshot.elt.imageop.RawImage;
+import com.leidoslabs.holeshot.elt.imageop.ImageOp;
+import com.leidoslabs.holeshot.elt.imageop.Interpolated;
 import com.leidoslabs.holeshot.elt.utils.Vector3Collector;
 
 /**
  * OpenGL Histogram operation. Computes histogram from raw image
  * First operation in image chain
  */
-class OglHistogram extends OglAbstractImageOp implements Histogram {
+class OglHistogram extends OglAbstractImageOpPrimitive implements Histogram {
    private static final Logger LOGGER = LoggerFactory.getLogger(OglHistogram.class);
 
    // Enable additional debug logging
@@ -100,8 +101,9 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
    private FloatBuffer histogramBuffer;
    private Framebuffer histogramFramebuffer;
 
-   private final HistogramType histogramType;
-   private RawImage rawImage;
+   private static final HistogramType HISTOGRAM_TYPE = HistogramType.RGB;
+
+   private ImageOp interpolated;
 
 
    private FloatBuffer rawImageBuffer;
@@ -109,15 +111,11 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
 
    private VertexArrayObject rawImageVAO;
 
-   // List of Shader programs to run for this histogram, usually one per band
-   private List<ShaderProgram> shaderStates;
-
    private final FloatBuffer pointInstance;
 
    public OglHistogram(HistogramType histogramType) {
       this.pointInstance = BufferUtils.createFloatBuffer(4);
 
-      this.histogramType = HistogramType.RGB;
       this.downsamplingFactor = DEFAULT_DOWNSAMPLING_FACTOR;
    }
 
@@ -146,12 +144,11 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
    //  private int first = 0;
 
    @Override
-   public void doRender() throws IOException {
+   public void doRender() throws Exception {
 
       try {
-         initializeShaderStates();
-
          initializeFramebuffer();
+         getHistogramBuffer().clearBuffer(0.0f, 0.0f, 0.0f, 1.0f);
 
          // Bind to the Histogram Buffer for Writing
          getHistogramBuffer().bind();
@@ -172,19 +169,20 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
 
 
          // Bind the Array Buffer that holds the vertices that are sent down to the vertex shader
-         final Framebuffer rawImageFB = getRawImageFramebuffer();
+         final Framebuffer rawImageFB = getInterpolatedFramebuffer();
          final Dimension rawImageFBSize = rawImageFB.getSize();
          allocateVAO(rawImageFB);
 
          glBindVertexArray(rawImageVAO.getVao());
 
          glActiveTexture(GL_TEXTURE1);
-         glBindTexture(GL_TEXTURE_2D, getRawImageFramebuffer().getTexture().getId());
+         glBindTexture(GL_TEXTURE_2D, getInterpolatedFramebuffer().getTexture().getId());
          glActiveTexture(GL_TEXTURE0);
 
          final int pointsToSample = (rawImageFBSize.width * rawImageFBSize.height) / downsamplingFactor;
 
          // Iterate over the shader programs to collect the histogram for each of the images HISTOGRAM_BANDS.
+         List<ShaderProgram> shaderStates = createShaderPrograms();
          for (ShaderProgram shaderState : shaderStates) {
             shaderState.useProgram();
 
@@ -206,10 +204,14 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
             readHistogram();
 
             // Dump the histogram to STDOUT for debugging purposes
-            dumpHistogram(false);
+            System.out.println("BEGIN HISTOGRAM");
+            dumpHistogram(true);
+            System.out.println("END HISTOGRAM");
 
             readRawImage();
-            dumpRawImage(false);
+            System.out.println("BEGIN RAW IMAGE");
+            dumpRawImage(true);
+            System.out.println("END RAW IMAGE");
          }
       } finally {
          glBindVertexArray(0);
@@ -220,14 +222,14 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
       }
    }
    private void readRawImage() {
-      final Dimension size = rawImage.getResultFramebuffer().getSize();
+      final Dimension size = interpolated.getResultFramebuffer().getSize();
       final int numBands = Math.max(getImage().getNumBands(), 3);
       final int bufLength = size.height * size.width * numBands;
       if (rawImageBuf == null || rawImageBuf.length != bufLength) {
          this.rawImageBuf = new float[bufLength];
          this.rawImageBuffer = BufferUtils.createFloatBuffer(rawImageBuf.length);
       }
-      getRawImageFramebuffer().readFramebuffer(rawImageBuffer, rawImageBuf);
+      getInterpolatedFramebuffer().readFramebuffer(rawImageBuffer, rawImageBuf);
    }
    private void dumpRawImage(boolean ignoreZeros) {
       OglHistogram.dump3DArray(rawImageBuf, ignoreZeros, "RAW IMAGE", -1);
@@ -249,8 +251,8 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
    }
    private List<ShaderProgram> createShaderPrograms() throws IOException {
       List<ShaderProgram> programs = new ArrayList<ShaderProgram>();
-      for (String vertexShader: histogramType.getVertexShaders()) {
-         programs.add(new ShaderProgram(HistogramType.class, vertexShader, HistogramType.Shaders.HISTOGRAM_ACCUMULATION_SHADER));
+      for (String vertexShader: HISTOGRAM_TYPE.getVertexShaders()) {
+         programs.add(getELTDisplayContext().getShader(String.format("%s::%s",OglHistogram.class.getName(), vertexShader),HistogramType.class, vertexShader, HistogramType.Shaders.HISTOGRAM_ACCUMULATION_SHADER));
       }
       return programs;
    }
@@ -275,28 +277,23 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
    private int getHistogramWidth() {
       return getHistogramSize().width;
    }
-   private RawImage getRawImage() {
-      if (rawImage == null) {
-         rawImage = getImageChain().getPreviousImageOp(this,  RawImage.class);
+   private ImageOp getInterpolated() {
+      if (interpolated == null) {
+         interpolated = getImageChain().getPreviousImageOp(this,  Interpolated.class);
       }
-      return rawImage;
+      return interpolated;
    }
-   private Framebuffer getRawImageFramebuffer() {
-      return getRawImage().getResultFramebuffer();
+   private Framebuffer getInterpolatedFramebuffer() {
+      return getInterpolated().getResultFramebuffer();
    }
 
-   private void initializeFramebuffer() throws IOException {
+   private void initializeFramebuffer() throws Exception {
       final int maxTextureSize = getMaxTextureSize();
       final int numRows = getNumRows();
       final Dimension histogramSize = new Dimension(maxTextureSize,numRows);
 
       if (this.histogramFramebuffer == null || !histogramSize.equals(histogramFramebuffer.getSize())) {
          this.histogramFramebuffer = new Framebuffer(histogramSize, GLInternalFormat.GlInternalFormatRGB32F, getELTDisplayContext());
-      }
-   }
-   private void initializeShaderStates() throws IOException {
-      if (this.shaderStates == null) {
-         this.shaderStates = createShaderPrograms();
       }
    }
    static void dump3DArray(float[] buffer, boolean ignoreZeros, String tag, int limit) {
@@ -323,10 +320,7 @@ class OglHistogram extends OglAbstractImageOp implements Histogram {
    @Override
    public void close() throws IOException {
       super.close();
-      CloseableUtils.close(Stream.concat(
-            Stream.of(histogramFramebuffer, rawImageVAO),
-            shaderStates.stream()
-            ).toArray(Closeable[]::new));
+      CloseableUtils.close(histogramFramebuffer, rawImageVAO);
    }
 
    @Override

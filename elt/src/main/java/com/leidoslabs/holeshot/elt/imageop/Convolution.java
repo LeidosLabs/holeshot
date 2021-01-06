@@ -19,6 +19,6 @@ package com.leidoslabs.holeshot.elt.imageop;
 /**
  * Interface for Convolution Operations
  */
-public interface Convolution extends ImageOp {
+public interface Convolution extends ImageOpPrimitive {
 
 }

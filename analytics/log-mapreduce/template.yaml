@@ -1,0 +1,260 @@
+AWSTemplateFormatVersion: 2010-09-09
+Transform: AWS::Serverless-2016-10-31
+Description: Log Data Pipeline Template
+Parameters:
+  StackSuffix:
+    Type: String
+    Default: dev
+  Subnet:
+    Type: String
+  SecurityGroup:
+    Type: String
+  TimerPeriod:
+    Type: String
+    Default: 24 hours
+  TileserverUrl:
+    Type: String
+  AnalyticsApiUrl:
+    Type: String
+  AnalyticsApiKey:
+    Type: String
+  EMRJobLogsS3Path:
+    Description: The base of the location in s3 to save EMR run logs to
+    Type: String
+  InputLogsS3Path:
+    Description: The base 's3://bucket/folder' location of raw logs, not including date-specific portion
+    Type: String
+  JarFileS3Path:
+    Description: The s3 path to the jar s3://bucket/folder/log-mapreduce.jar
+    Type: String
+  KeyPair:
+    Description: The keypair to allow ssh logon to cluster nodes
+    Type: String
+  EMRReleaseVersion:
+    Description: >
+      Determines the base configuration of the instances in your
+      cluster, including the Hadoop version.
+    Type: String
+    Default: emr-5.13.0
+  CoreInstanceType:
+    Description: Type of instance to use for core workers
+    Type: String
+    Default: m4.large
+  CoreInstanceCount:
+    Description: Number of core instances, should be a numeric value >=1
+    Type: String
+    Default: 1
+  MasterInstanceType:
+    Description: Type of instance to use for master node
+    Type: String
+    Default: m4.large
+Resources:
+  LogEMRPipeline:
+    Type: 'AWS::DataPipeline::Pipeline'
+    Properties:
+      Activate: 'true'
+      Description: >-
+        Data Pipeline for creating and scheduling the LogEMR Cluster to generate
+        request summaries from tileserver logs
+      Name: !Sub Log-EMR-Pipeline-${StackSuffix}
+      PipelineTags:
+        - Key: Name
+          Value: !Sub Log-EMR-${StackSuffix}
+      ParameterValues:
+        - Id: myCopyS3LogsToHDFSStep
+          StringValue: !Sub command-runner.jar,s3-dist-cp,--src=${InputLogsS3Path}/#{year(@scheduledStartTime)}/#{format(@scheduledStartTime, 'MM')}/#{format(@scheduledStartTime, 'dd')},--dest=hdfs:///tileserver-logs
+        - Id: myMapReduceLogDataStep
+          StringValue: !Sub command-runner.jar,spark-submit,--deploy-mode,cluster,--class,com.leidoslabs.holeshot.analytics.emr.JobMain,${JarFileS3Path}
+      PipelineObjects:
+        - Id: EmrActivityObj
+          Name: EmrActivityObj
+          Fields:
+            - Key: type
+              StringValue: EmrActivity
+            - Key: step
+              StringValue: '#{myCopyS3LogsToHDFSStep}'
+            - Key: step
+              StringValue: '#{myMapReduceLogDataStep}'
+            - Key: runsOn
+              RefValue: EmrClusterObj
+        - Id: Default
+          Name: Default
+          Fields:
+            - Key: failureAndRerunMode
+              StringValue: CASCADE
+            - Key: schedule
+              RefValue: DefaultSchedule
+            - Key: resourceRole
+              StringValue: DataPipelineDefaultResourceRole
+            - Key: role
+              StringValue: DataPipelineDefaultRole
+            - Key: pipelineLogUri
+              StringValue: !Ref EMRJobLogsS3Path
+            - Key: subnetId
+              StringValue: !Ref Subnet
+            - Key: scheduleType
+              StringValue: cron
+            - Key: type
+              StringValue: Default
+            - Key: additionalSlaveSecurityGroupIds
+              StringValue: !Ref SecurityGroup
+            - Key: additionalMasterSecurityGroupIds
+              StringValue: !Ref SecurityGroup
+        - Id: DefaultSchedule
+          Name: RunOncePerPeriodSchedule
+          Fields:
+            - Key: period
+              StringValue: !Ref TimerPeriod
+            - Key: type
+              StringValue: Schedule
+            - Key: startAt
+              StringValue: FIRST_ACTIVATION_DATE_TIME
+        - Id: EmrClusterObj
+          Name: EmrClusterObj
+          Fields:
+            - Key: type
+              StringValue: EmrCluster
+            - Key: coreInstanceType
+              StringValue: !Ref CoreInstanceType
+            - Key: coreInstanceCount
+              StringValue: !Ref CoreInstanceCount
+            - Key: masterInstanceType
+              StringValue: !Ref MasterInstanceType
+            - Key: releaseLabel
+              StringValue: !Ref EMRReleaseVersion
+            - Key: terminateAfter
+              StringValue: 50 Minutes
+            - Key: keyPair
+              StringValue: !Ref KeyPair
+            - Key: applications
+              StringValue: spark
+            - Key: configuration
+              RefValue: yarn-env-config
+            - Key: configuration
+              RefValue: spark-config
+            - Key: configuration
+              RefValue: spark-log4j-config
+        - Id: yarn-env-config
+          Name: yarn-env
+          Fields:
+            - Key: type
+              StringValue: EmrConfiguration
+            - Key: classification
+              StringValue: yarn-env
+            - Key: configuration
+              RefValue: yarn-env-exports
+        - Id: spark-config
+          Name: spark
+          Fields:
+            - Key: type
+              StringValue: EmrConfiguration
+            - Key: classification
+              StringValue: spark
+            - Key: property
+              RefValue: resource-allocation-prop
+        - Id: spark-log4j-config
+          Name: spark-log4j
+          Fields:
+            - Key: type
+              StringValue: EmrConfiguration
+            - Key: classification
+              StringValue: spark-log4j
+            - Key: property
+              RefValue: log4j-loglevel-prop
+        - Id: yarn-env-exports
+          Name: export
+          Fields:
+            - Key: type
+              StringValue: EmrConfiguration
+            - Key: classification
+              StringValue: export
+            - Key: property
+              RefValue: ANALYTICS_API_URL
+            - Key: property
+              RefValue: ANALYTICS_API_KEY
+            - Key: property
+              RefValue: TILESERVER_URL
+            - Key: property
+              RefValue: INPUT_LOG_LOCATION
+            - Key: property
+              RefValue: OUTPUT_LOCATION
+        - Id: resource-allocation-prop
+          Name: maximizeResourceAllocation
+          Fields:
+            - Key: type
+              StringValue: Property
+            - Key: key
+              StringValue: maximizeResourceAllocation
+            - Key: value
+              StringValue: 'true'
+        - Id: log4j-loglevel-prop
+          Name: log4j.rootCategory
+          Fields:
+            - Key: type
+              StringValue: Property
+            - Key: key
+              StringValue: log4j.rootCategory
+            - Key: value
+              StringValue: 'INFO, console'
+        - Id: ANALYTICS_API_URL
+          Name: ANALYTICS_API_URL
+          Fields:
+            - Key: type
+              StringValue: Property
+            - Key: key
+              StringValue: ANALYTICS_API_URL
+            - Key: value
+              StringValue: !Ref AnalyticsApiUrl
+        - Id: ANALYTICS_API_KEY
+          Name: ANALYTICS_API_KEY
+          Fields:
+            - Key: type
+              StringValue: Property
+            - Key: key
+              StringValue: ANALYTICS_API_KEY
+            - Key: value
+              StringValue: !Ref AnalyticsApiKey
+        - Id: TILESERVER_URL
+          Name: TILESERVER_URL
+          Fields:
+            - Key: type
+              StringValue: Property
+            - Key: key
+              StringValue: TILESERVER_URL
+            - Key: value
+              StringValue: !Ref TileserverUrl
+        - Id: INPUT_LOG_LOCATION
+          Name: INPUT_LOG_LOCATION
+          Fields:
+            - Key: type
+              StringValue: Property
+            - Key: key
+              StringValue: INPUT_LOG_LOCATION
+            - Key: value
+              StringValue: 'hdfs:///tileserver-logs/*'
+        - Id: OUTPUT_LOCATION
+          Name: OUTPUT_LOCATION
+          Fields:
+            - Key: type
+              StringValue: Property
+            - Key: key
+              StringValue: OUTPUT_LOCATION
+            - Key: value
+              StringValue: 'hdfs:///results'
+      ParameterObjects:
+        - Id: myCopyS3LogsToHDFSStep
+          Attributes:
+            - Key: type
+              StringValue: String
+            - Key: description
+              StringValue: Should perform the moving of data into HDFS
+            - Key: isArray
+              StringValue: 'true'
+        - Id: myMapReduceLogDataStep
+          Attributes:
+            - Key: type
+              StringValue: String
+            - Key: description
+              StringValue: Should execute the jar associated with this module to process the logs
+            - Key: isArray
+              StringValue: 'true'
