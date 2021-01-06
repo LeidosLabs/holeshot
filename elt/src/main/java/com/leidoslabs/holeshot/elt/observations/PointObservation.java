@@ -19,6 +19,8 @@ package com.leidoslabs.holeshot.elt.observations;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Point;
 
+import com.leidoslabs.holeshot.elt.utils.GeometryUtils;
+
 import java.util.Map;
 
 /**
@@ -31,6 +33,6 @@ public class PointObservation extends Observation<Point> {
     }
 
     public PointObservation(Coordinate p, Map<String, String> properties) {
-        super(factory.createPoint(p), properties);
+        super(GeometryUtils.GEOMETRY_FACTORY.createPoint(p), properties);
     }
 }

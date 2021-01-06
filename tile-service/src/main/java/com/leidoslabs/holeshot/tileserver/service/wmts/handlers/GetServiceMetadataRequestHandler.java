@@ -41,6 +41,7 @@ public class GetServiceMetadataRequestHandler {
     public GetServiceMetadataRequestHandler(String tileServerUrl, String imageId, String timestamp) throws IOException, NotFoundException {
         this.tileServerUrl = tileServerUrl;
         LOGGER.debug("Creating Image Catalog Client");
+        // TODO don't make a new catalogclient for every request
         CatalogClient catalogClient = new CatalogClient(CatalogCredentials.getApplicationDefaults());
         LOGGER.debug("Catalog client intialized, retrieving entry for " + imageId + ":" + timestamp);
         entry = catalogClient.getCatalogEntry(imageId + ":" + timestamp);

@@ -18,7 +18,6 @@ package com.leidoslabs.holeshot.elt.observations;
 
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.Geometry;
-import org.locationtech.jts.geom.GeometryFactory;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -29,8 +28,6 @@ import java.util.UUID;
  * @param <G>
  */
 public class Observation<G extends Geometry> {
-    protected static GeometryFactory factory = new GeometryFactory();
-
     private boolean selected;
     private G geometry;
     private HashMap<String, String> properties = new HashMap<>();

@@ -18,7 +18,9 @@ package com.leidoslabs.holeshot.elt.coord;
 
 import org.apache.commons.lang3.tuple.Pair;
 import org.joml.Matrix4d;
+import org.joml.Matrix4dc;
 import org.joml.Vector2d;
+import org.joml.Vector2dc;
 
 /**
  * Class for warping between two quadrilaterals, currently unused 
@@ -26,17 +28,15 @@ import org.joml.Vector2d;
  *
  */
 public class Warper {
-   private Pair<Vector2d, Vector2d> lowerLeft;
-   private Pair<Vector2d, Vector2d> lowerRight;
-   private Pair<Vector2d, Vector2d> upperRight;
-   private Pair<Vector2d, Vector2d> upperLeft;
-   private final Matrix4d srcMat;
-   private final Matrix4d destMat;
+   private Pair<Vector2dc, Vector2dc> lowerLeft;
+   private Pair<Vector2dc, Vector2dc> lowerRight;
+   private Pair<Vector2dc, Vector2dc> upperRight;
+   private Pair<Vector2dc, Vector2dc> upperLeft;
+   private Matrix4d srcMat;
+   private Matrix4d destMat;
    private Matrix4d warpMat;
 
    private Warper() {
-      srcMat = new Matrix4d();
-      destMat = new Matrix4d();
    }
 
    private void computeWarp() {
@@ -50,28 +50,28 @@ public class Warper {
                           upperRight.getRight(),
                           upperLeft.getRight(),
                           destMat);
-      warpMat = srcMat.mul(destMat);
+      srcMat.mul(destMat, warpMat);
    }
 
 
-   public void computeSquareToQuad(  Vector2d point0,
-                                     Vector2d point1,
-                                     Vector2d point2,
-                                     Vector2d point3,
+   public void computeSquareToQuad(  Vector2dc point0,
+                                     Vector2dc point1,
+                                     Vector2dc point2,
+                                     Vector2dc point3,
                                      Matrix4d mat ) {
 
-      Vector2d d1 = point1.sub(point2);
-      Vector2d d2 = point3.sub(point2);
-      Vector2d s = point0.sub(point1).add(point2).sub(point3);
+      Vector2dc d1 = point1.sub(point2, new Vector2d());
+      Vector2dc d2 = point3.sub(point2, new Vector2d());
+      Vector2dc s = point0.sub(point1, new Vector2d()).add(point2).sub(point3);
 
-      double g = (s.x * d2.y - d2.x * s.y) / (d1.x * d2.y - d2.x * d1.y);
-      double h = (d1.x * s.y - s.x * d1.y) / (d1.x * d2.y - d2.x * d1.y);
-      double a = point1.x - point0.x + g * point1.x;
-      double b = point3.x - point0.x + h * point3.x;
-      double c = point0.x;
-      double d = point1.y - point0.y + g * point1.y;
-      double e = point3.y - point0.y + h * point3.y;
-      double f = point0.y;
+      double g = (s.x() * d2.y() - d2.x() * s.y()) / (d1.x() * d2.y() - d2.x() * d1.y());
+      double h = (d1.x() * s.y() - s.x() * d1.y()) / (d1.x() * d2.y() - d2.x() * d1.y());
+      double a = point1.x() - point0.x() + g * point1.x();
+      double b = point3.x() - point0.x() + h * point3.x();
+      double c = point0.x();
+      double d = point1.y() - point0.y() + g * point1.y();
+      double e = point3.y() - point0.y() + h * point3.y();
+      double f = point0.y();
 
       mat.set(a, d, 0.0, g,
               b, e, 0.0, h,
@@ -80,10 +80,10 @@ public class Warper {
 
    }
 
-   public void computeQuadToSquare( Vector2d point0,
-         Vector2d point1,
-         Vector2d point2,
-         Vector2d point3,
+   public void computeQuadToSquare( Vector2dc point0,
+         Vector2dc point1,
+         Vector2dc point2,
+         Vector2dc point3,
          Matrix4d mat ) {
 
       computeSquareToQuad(point0, point1, point2, point3, mat);
@@ -117,33 +117,33 @@ public class Warper {
               C*idet, F*idet, 0.0, I*idet);
    }
 
-   public Matrix4d getWarpMatrix()
+   public Matrix4dc getWarpMatrix()
    {
       return warpMat;
    }
 
    public static class WarperFactory {
-      private Pair<Vector2d, Vector2d> lowerLeft;
-      private Pair<Vector2d, Vector2d> lowerRight;
-      private Pair<Vector2d, Vector2d> upperRight;
-      private Pair<Vector2d, Vector2d> upperLeft;
+      private Pair<Vector2dc, Vector2dc> lowerLeft;
+      private Pair<Vector2dc, Vector2dc> lowerRight;
+      private Pair<Vector2dc, Vector2dc> upperRight;
+      private Pair<Vector2dc, Vector2dc> upperLeft;
 
       public WarperFactory() {
       }
 
-      public WarperFactory lowerLeft(Vector2d src, Vector2d dest) {
+      public WarperFactory lowerLeft(Vector2dc src, Vector2dc dest) {
          this.lowerLeft = Pair.of(src, dest);
          return this;
       }
-      public WarperFactory lowerRight(Vector2d src, Vector2d dest) {
+      public WarperFactory lowerRight(Vector2dc src, Vector2dc dest) {
          this.lowerRight = Pair.of(src, dest);
          return this;
       }
-      public WarperFactory upperRight(Vector2d src, Vector2d dest) {
+      public WarperFactory upperRight(Vector2dc src, Vector2dc dest) {
          this.upperRight = Pair.of(src, dest);
          return this;
       }
-      public WarperFactory upperLeft(Vector2d src, Vector2d dest) {
+      public WarperFactory upperLeft(Vector2dc src, Vector2dc dest) {
          this.upperLeft = Pair.of(src, dest);
          return this;
       }

@@ -56,6 +56,7 @@ public class TileServerClient {
 
   private static final String GET_METADATA_URL_PATTERN = "%s/%s/metadata.json";
   private static final String GET_TILE_URL_PATTERN = "%s/%s/%d/%d/%d/%d.png";
+  private static final String GET_TILE_USER_URL_PATTERN = "%s/%s/%s/%d/%d/%d/%d.png";
 
   private static final String OFFLINE_CACHE_LOCATION = "offline_cache";
   private static final String AUTH_HEADER = "x-api-key";
@@ -66,6 +67,7 @@ public class TileServerClient {
   private String endpoint;
   private HoleshotCredentials credentials;
   private final OfflineCache offlineCache;
+  private String username;
 
 
   private HttpClient httpClient;
@@ -129,8 +131,14 @@ public class TileServerClient {
     try {
       RequestConfig requestConfig = RequestConfig.custom().setRedirectsEnabled(false)
           .setSocketTimeout(60 * 1000).setConnectTimeout(60 * 1000).build();
-      HttpGet tileRequest = new HttpGet(this.endpoint + "/" + String.format(GET_TILE_URL_PATTERN,
-          collectionID, timestamp, rLevel, column, row, band));
+      HttpGet tileRequest;
+      if (username != null && !username.equalsIgnoreCase("anonymous")) {
+    	  tileRequest = new HttpGet(this.endpoint + "/" + String.format(GET_TILE_USER_URL_PATTERN,
+                  username, collectionID, timestamp, rLevel, column, row, band));
+      } else {
+          tileRequest = new HttpGet(this.endpoint + "/" + String.format(GET_TILE_URL_PATTERN,
+                  collectionID, timestamp, rLevel, column, row, band));
+      }
 
       LOGGER.debug("Tile Request: {}", tileRequest.getURI().toString());
       tileRequest.setConfig(requestConfig);
@@ -192,6 +200,10 @@ public class TileServerClient {
 
   void setEndpoint(String endpoint) {
     this.endpoint = endpoint;
+  }
+  
+  public String getEndpoint() {
+	    return endpoint;
   }
 
   void setCredentials(HoleshotCredentials credentials) {
@@ -285,5 +297,13 @@ public class TileServerClient {
 
   protected void setDefaultMaxPerRoute(Integer defaultMaxPerRoute) {
     this.defaultMaxPerRoute = defaultMaxPerRoute;
+  }
+
+  protected String getUsername() {
+      return username;
+  }
+
+  protected void setUsername(String username) {
+      this.username = username;
   }
 }

@@ -33,7 +33,7 @@ JETTY_PERCENT_CORES=100
 JETTY_CORES=$(( $(grep -c ^processor /proc/cpuinfo) * $JETTY_PERCENT_CORES/100))
 
 # Any command line arguments to be passed to the our Java Daemon implementations init() method
-ARGS="-Dlog_dir=/var/log/$NAME -Dlog4j.configuration=$FILE_PATH/bin/log4j.properties -Xmx$JETTY_MEM_IN_MB -Djava.util.concurrent.ForkJoinPool.common.parallelism=$JETTY_CORES -Dfile.encoding=UTF-8"
+ARGS="-Dlog_dir=/var/log/$NAME -Dlog4j.configuration=$FILE_PATH/bin/log4j.properties -Dleidos.catalog.url={{CatalogURL}} -Xmx$JETTY_MEM_IN_MB -Djava.util.concurrent.ForkJoinPool.common.parallelism=$JETTY_CORES -Dfile.encoding=UTF-8"
 
 # The file that will contain our process identification number (pid) for other scripts/programs that need to access it.
 PID="/var/run/$NAME.pid"

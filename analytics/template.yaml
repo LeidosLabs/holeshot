@@ -1,0 +1,190 @@
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  This will deploy all analytics stacks
+  To deploy the dev stack use `sam deploy`
+  To deploy the primary stack use `sam deploy --config-env primary`
+  To deploy a custom stack, edit the file samconfig.toml to add your stack
+
+Parameters:
+  ElasticsearchEndpoint:
+    Type: String
+  TileserverUrl:
+    Description: The tileserver is used to retrieve metadata for camera models. Don't include protocol
+    Type: String
+  CatalogUrl:
+    Description: The url of the image catalog service. Don't include protocol
+    Type: String
+  LookbackDays:
+    Description: How many previous days the algo should consider relevant
+    Type: Number
+    Default: 10
+  IngestSNSTopicArn:
+    Description: The image ingest sns topic that will trigger the function to run
+    Type: String
+  Subnet:
+    Description: The subnet for the lambda, should be in same VPC as the tileserver
+    Type: String
+  WarehouseSecurityGroup:
+    Description: The security group for the lambda, should allow access to internal tileserver endpoint
+    Type: String
+  EMRSecurityGroup:
+    Description: The security group to use for the Log EMR, should allow inter-node communication
+    Type: String
+  StackSuffix:
+    Description: A suffix to append to stack resources to make them unique and identifiable
+    Default: dev
+    Type: String
+  RolePermissionsBoundary:
+    Description: The permissions boundary required by developers to create IAM roles
+    Type: String
+  FirehoseLogDeliveryStreamName:
+    Description: Name of delivery stream to read from
+    Type: String
+  ParentDNSName:
+    Description: The Parent Domainname to attach this stack to
+    Type: String
+  HostedZoneCertificateArn:
+    Description: The ARN to the Parent Domain's Certificate
+    Type: String
+  PublicZoneId:
+    Description: The Route53 Public Zone
+    Type: AWS::Route53::HostedZone::Id
+  PrivateZoneId:
+    Description: The Route53 Public Zone
+    Type: AWS::Route53::HostedZone::Id
+  PrimaryStack:
+    Description: true or false, this stack should be assigned the primary url
+    Default: 'false'
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    ConstraintDescription: true or false
+  AnalyticsApiKeyValue:
+    Description: >
+      The value of the tile analytics api key to be used across services. Must be unique among other keys.
+      Defining it here allows it to be easily assigned to the analytics-warehouse api and used in cache-prioritization
+      Must be at least 20 characters long.
+    Type: String
+  IpWhitelist:
+    Description: Comma Delimited List of IPs to whitelist in API Gateway Resource Policy
+    Type: String
+  TileserverApiKey:
+    Type: String
+  EMRJobLogsS3Path:
+    Description: The path that the EMR will write its logs to
+    Type: String
+  InputLogsS3Path:
+    Description: The path that the EMR job will read tileserver logs from
+    Type: String
+  JarFileS3Path:
+    Description: The location of the EMR job .jar file. It must be uploaded prior to running this script
+    Type: String
+  KeyPair:
+    Description: A keypair, which can be used to SSH into EMR instances for debugging
+    Type: String
+  CoreInstanceType:
+    Description: The type of instance for processing logs in EMR
+    Type: String
+    Default: m4.large
+  CoreInstanceCount:
+    Description: The number of processing instances in the EMR job
+    Type: String
+    Default: 1
+  MasterInstanceType:
+    Description: The type of instance for the master node in EMR
+    Type: String
+    Default: m4.large
+
+Conditions:
+  IsPrimaryStack: !Equals [ !Ref PrimaryStack, 'true' ]
+
+Resources:
+  AnalyticsApiKey:
+    Type: AWS::ApiGateway::ApiKey
+    Properties:
+      Description: A key to be used across analytics services
+      Name: !Sub Analytics-Api-Key-${StackSuffix}
+      Enabled: True
+      Value: !Ref AnalyticsApiKeyValue
+  AnalyticsWarehouse:
+    Type: AWS::Serverless::Application
+    DependsOn: AnalyticsApiKey
+    Properties:
+      Location: ./analytics-warehouse/template.yaml
+      Parameters:
+        ElasticsearchEndpoint: !Ref ElasticsearchEndpoint
+        StackSuffix: !Ref StackSuffix
+        RolePermissionsBoundary: !Ref RolePermissionsBoundary
+        Subnet: !Ref Subnet
+        SecurityGroup: !Ref WarehouseSecurityGroup
+        ApiKeyId: !Ref AnalyticsApiKey
+        ParentDNSName: !Ref ParentDNSName
+        HostedZoneCertificateArn: !Ref HostedZoneCertificateArn
+        PublicZoneId: !Ref PublicZoneId
+        PrivateZoneId: !Ref PrivateZoneId
+        PrimaryStack: !Ref PrimaryStack
+        IpWhitelist: !Ref IpWhitelist
+  CachePrioritization:
+    Type: AWS::Serverless::Application
+    Properties:
+      Location: ./cache-prioritization/template.yaml
+      Parameters:
+        AnalyticsWarehouseUrl: !If
+          - IsPrimaryStack
+          - !Sub analytics-warehouse.${ParentDNSName}
+          - !Sub analytics-warehouse-${StackSuffix}.${ParentDNSName}
+        AnalyticsApiKey: !Ref AnalyticsApiKeyValue
+        TileserverUrl: !Ref TileserverUrl
+        TileserverApiKey: !Ref TileserverApiKey
+        CatalogUrl: !Ref CatalogUrl
+        PeriodHours: 24
+        LookbackDays: !Ref LookbackDays
+        IngestSNSTopicArn: !Ref IngestSNSTopicArn
+        CacheListSNSTopicArn: !GetAtt AnalyticsWarehouse.Outputs.CacheListTopic
+        Subnet: !Ref Subnet
+        SecurityGroup: !Ref WarehouseSecurityGroup
+        StackSuffix: !Ref StackSuffix
+        RolePermissionsBoundary: !Ref RolePermissionsBoundary
+  FirehoseApi:
+    Type: AWS::Serverless::Application
+    DependsOn: AnalyticsWarehouse
+    Properties:
+      Location: ./firehose-proxy/template.yaml
+      Parameters:
+        RolePermissionsBoundary: !Ref RolePermissionsBoundary
+        ApiKeyId: !Ref AnalyticsApiKey
+        StackSuffix: !Ref StackSuffix
+        DeliveryStreamName: !Ref FirehoseLogDeliveryStreamName
+        ParentDNSName: !Ref ParentDNSName
+        HostedZoneCertificateArn: !Ref HostedZoneCertificateArn
+        PublicZoneId: !Ref PublicZoneId
+        PrimaryStack: !Ref PrimaryStack
+        IpWhitelist: !Ref IpWhitelist
+  LogMapReduce:
+    Type: AWS::Serverless::Application
+    DependsOn: AnalyticsWarehouse
+    Properties:
+      Location: ./log-mapreduce/template.yaml
+      Parameters:
+        StackSuffix: !Ref StackSuffix
+        Subnet: !Ref Subnet
+        SecurityGroup: !Ref EMRSecurityGroup
+        TileserverUrl: !Ref TileserverUrl
+        AnalyticsApiUrl: !If
+          - IsPrimaryStack
+          - !Sub analytics-warehouse.${ParentDNSName}
+          - !Sub analytics-warehouse-${StackSuffix}.${ParentDNSName}
+        AnalyticsApiKey: !Ref AnalyticsApiKeyValue
+        EMRJobLogsS3Path: !Ref EMRJobLogsS3Path
+        InputLogsS3Path: !Ref InputLogsS3Path
+        JarFileS3Path: !Ref JarFileS3Path
+        KeyPair: !Ref KeyPair
+        CoreInstanceType: !Ref CoreInstanceType
+        CoreInstanceCount: !Ref CoreInstanceCount
+        MasterInstanceType: !Ref MasterInstanceType
+
+Outputs:
+  AnalyticsApiKeyId:
+    Description: The ID of the API Key for accessing analytics services. See API Gateway console for value
+    Value: !Ref AnalyticsApiKey

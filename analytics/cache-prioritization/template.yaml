@@ -1,0 +1,159 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+   To deploy the dev stack use `sam deploy`
+   To deploy the primary stack use `sam deploy --config-env primary`
+   To deploy a custom stack, edit the file samconfig.toml to add your stack
+
+Parameters:
+  AnalyticsWarehouseUrl:
+    Type: String
+    Description: The endpoint for the warehouse deployment you'd like to use. Don't include the http protocol
+  AnalyticsApiKey:
+    Description: API Key for accessing other analytics services (analytics-warehouse)
+    Type: String
+  TileserverUrl:
+    Type: String
+    Description: The endpoint for the tileserver deployment you'd like to use. Don't include the http protocol
+  TileserverApiKey:
+    Description: API Key for getting metadata from tileserver
+    Type: String
+  CatalogUrl:
+    Type: String
+    Description: The endpoint for the catalog api you'd like to use. Don't include the http protocol
+  PeriodHours:
+    Type: Number
+    Default: 24
+  LookbackDays:
+    Description: How many previous days the algo should consider relevant
+    Type: Number
+    Default: 10
+  IngestSNSTopicArn:
+    Description: The image ingest sns topic that will trigger the function to run
+    Type: String
+  CacheListSNSTopicArn:
+    Description: The chache SNS topic created in analytics-warehouse
+    Type: String
+    Default: arn:aws:sns:us-east-1:555555555555:advanced-analytics-cachelist-topic-primary
+  Subnet:
+    Description: The subnet for the lambda, should be in same VPC as the tileserver
+    Type: String
+  SecurityGroup:
+    Type: String
+  StackSuffix:
+    Description: A suffix to append to stack resources to make them unique and identifiable
+    Type: String
+  RolePermissionsBoundary:
+    Description: The permissions boundary required by developers to create IAM roles
+    Type: String
+
+Globals:
+  Function:
+    Timeout: 180
+    Environment:
+      Variables:
+        ANALYTICS_API_URL: !Ref AnalyticsWarehouseUrl
+        TILESERVER_URL: !Ref TileserverUrl
+        CATALOG_URL: !Ref CatalogUrl
+        HOLESHOT_TILESERVICE_KEY: !Ref TileserverApiKey
+        ANALYTICS_API_KEY: !Ref AnalyticsApiKey
+
+Resources:
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub AADev-RequestAnalyticsApiRole-${StackSuffix}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          Effect: Allow
+          Principal:
+            Service:
+              - lambda.amazonaws.com
+          Action:
+            - sts:AssumeRole
+      Path: /
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      PermissionsBoundary: !Ref RolePermissionsBoundary
+
+  CachePrioritizationFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/cache-prioritization-0.2.jar
+      Handler: com.leidoslabs.holeshot.analytics.caching.IngestedImagePriorityHandler::handleRequest
+      Runtime: java8
+      MemorySize: 512
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+        SubnetIds:
+          - !Ref Subnet
+      Environment:
+        Variables:
+          LOOKBACK_DAYS: !Ref LookbackDays
+      Events:
+        ImageIngested:
+          Type: SNS
+          Properties:
+            Topic: !Ref IngestSNSTopicArn
+            
+  UserAOICronFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/cache-prioritization-0.2.jar
+      Handler: com.leidoslabs.holeshot.analytics.caching.user.UserAOICron::handleRequest
+      Runtime: java8
+      MemorySize: 512
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+        SubnetIds:
+          - !Ref Subnet
+      Environment:
+        Variables:
+          PERIOD_HOURS: !Ref PeriodHours
+      Events:
+        OfflineModelCron:
+          Type: Schedule
+          Properties:
+            Schedule: !Sub rate(${PeriodHours} hours)
+            
+  CreateCacheListFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Role: !GetAtt LambdaRole.Arn
+      CodeUri: target/cache-prioritization-0.2.jar
+      Handler: com.leidoslabs.holeshot.analytics.caching.user.CreateCacheList::handleRequest
+      Runtime: java8
+      MemorySize: 512
+      VpcConfig:
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+        SubnetIds:
+          - !Ref Subnet
+      Environment:
+        Variables:
+          PERIOD_HOURS: !Ref PeriodHours
+      Events:
+        UpdateList:
+          Type: SNS
+          Properties:
+            Topic: !Ref CacheListSNSTopicArn
+            
+Outputs:
+  CachePrioritizationFunction:
+    Description: "Global Cache Prioritization Function ARN"
+    Value: !GetAtt CachePrioritizationFunction.Arn
+   
+  UserAOICronFunction:
+    Description: "UserAOICronFunction ARN"
+    Value: !GetAtt UserAOICronFunction.Arn
+   
+  CreateCacheListFunction:
+    Description: "CreateCacheListFunction Function ARN"
+    Value: !GetAtt CreateCacheListFunction.Arn
+      

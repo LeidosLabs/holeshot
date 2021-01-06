@@ -6,7 +6,7 @@
 # Provides:          runonce
 # Required-Start:    $remote_fs $syslog
 # Required-Stop:     $remote_fs $syslog
-# Description:       Jetty Tile Service
+# Description:       Run-Once Service
 ### END INIT INFO
 
 

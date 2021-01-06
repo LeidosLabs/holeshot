@@ -16,47 +16,38 @@
 
 package com.leidoslabs.holeshot.elt.coord;
 
-import java.awt.geom.Point2D;
-
-import org.joml.Vector2d;
-import org.joml.Vector3d;
+import org.joml.Vector2ic;
+import org.joml.Vector3dc;
 import org.locationtech.jts.geom.Coordinate;
 
-import com.leidoslabs.holeshot.imaging.coord.ImageCoordinate;
-import com.leidoslabs.holeshot.imaging.coord.ImageScale;
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
 
 /**
  * Representation of OpenGLCoordinate with ELTCoordinate functionality
  */
-public class OpenGLELTCoordinate extends ELTCoordinate<Vector3d> {
+public class OpenGLELTCoordinate extends ELTCoordinate<Vector3dc> {
 
-  public OpenGLELTCoordinate(ImageWorld world, Vector3d coordinate, ImageScale imageScale) {
-    super(world, coordinate, imageScale);
-  }
+	public OpenGLELTCoordinate(ImageWorld windowViewport, Vector3dc coordinate) {
+		super(windowViewport, coordinate);
+	}
 
-  @Override
-  public Coordinate getGeodeticCoordinate() {
-      return new ImageCoordinate(getCameraModel(), getR0ImageCoordinate(), ImageScale.forRset(0)).getGeodeticCoordinate();
-  }
+	@Override
+	public Coordinate getGeodeticCoordinate() {
+		return getImageWorld().clipToGeodetic(getSourceCoordinate());
+	}
 
-  @Override
-  public Vector3d getOpenGLCoordinate() {
-    return getSourceCoordinate();
-  }
+	@Override
+	public Vector3dc getOpenGLCoordinate() {
+		return getSourceCoordinate();
+	}
 
-  @Override
-  public Point2D getR0ImageCoordinate() {
-    final Vector3d source = getSourceCoordinate();
-    final Vector2d imageCoord = getImage().openGLToImage(new Vector2d(source.x, source.y));
-    return new Point2D.Double(imageCoord.x, imageCoord.y);
-  }
+	@Override
+	public Vector2ic getScreenCoordinate() {
+		return getImageWorld().clipToScreen(getSourceCoordinate());
+	}
 
-  @Override
-  public Vector2d getScreenCoordinate() {
-    Vector3d source = getSourceCoordinate();
-    Vector3d screen = new Vector3d();
-    openGLToScreen().project(source, getData(getImageWorld().getCurrentViewport()), screen);
-
-    return new Vector2d(screen.x, screen.y);
-  }
+	@Override
+	public Coordinate getProjectedCoordinate() {
+		return getImageWorld().clipToProjected(getSourceCoordinate());
+	}  
 }

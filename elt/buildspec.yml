@@ -14,4 +14,4 @@ phases:
       - 'mvn -Dmaven.test.skip=true -DskipTests deploy --non-recursive'
 artifacts:
   files:
-    - target/elt-0.0.1-SNAPSHOT.jar
+    - target/elt-0.2.jar

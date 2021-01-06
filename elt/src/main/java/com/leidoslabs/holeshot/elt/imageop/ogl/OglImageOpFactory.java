@@ -17,49 +17,78 @@
 package com.leidoslabs.holeshot.elt.imageop.ogl;
 
 import java.io.IOException;
+import java.util.function.Consumer;
 
+import com.leidoslabs.holeshot.elt.ELTDisplayContext;
+import com.leidoslabs.holeshot.elt.Interpolation;
 import com.leidoslabs.holeshot.elt.gpuimage.HistogramType;
-import com.leidoslabs.holeshot.elt.imageop.*;
+import com.leidoslabs.holeshot.elt.imageop.CumulativeHistogram;
+import com.leidoslabs.holeshot.elt.imageop.DRAParameters;
+import com.leidoslabs.holeshot.elt.imageop.DynamicRangeAdjust;
+import com.leidoslabs.holeshot.elt.imageop.Histogram;
+import com.leidoslabs.holeshot.elt.imageop.ImageOpFactory;
+import com.leidoslabs.holeshot.elt.imageop.Interpolated;
+import com.leidoslabs.holeshot.elt.imageop.Mosaic;
+import com.leidoslabs.holeshot.elt.imageop.RawImage;
+import com.leidoslabs.holeshot.elt.imageop.SummedArea;
+import com.leidoslabs.holeshot.elt.imageop.ToneTransferCurve;
+import com.leidoslabs.holeshot.elt.tileserver.TileserverImage;
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
 
 /**
  * Factory class for OpenGL Image operations
  */
 public class OglImageOpFactory implements ImageOpFactory {
-   public OglImageOpFactory() {
-   }
+	public OglImageOpFactory() {
+	}
 
-   @Override
-   public CumulativeHistogram cumulativeHistogram() {
-      return new OglCumulativeHistogram();
-   }
+	@Override
+	public CumulativeHistogram cumulativeHistogram() {
+		return new OglCumulativeHistogram();
+	}
 
-   @Override
-   public DynamicRangeAdjust dynamicRangeAdjust() {
-      return new OglDynamicRangeAdjust();
-   }
+	@Override
+	public DynamicRangeAdjust dynamicRangeAdjust() {
+		return new OglDynamicRangeAdjust();
+	}
 
-   @Override
-   public Histogram histogram(HistogramType histogramType) {
-      return new OglHistogram(histogramType);
-   }
+	@Override
+	public Histogram histogram(HistogramType histogramType) {
+		return new OglHistogram(histogramType);
+	}
 
-   @Override
-   public RawImage rawImage(boolean progressiveRender) {
-      return new OglRawImage(progressiveRender);
-   }
+	@Override
+	public RawImage rawImage(TileserverImage image, boolean progressiveRender) {	
+		return new OglRawImage(image, progressiveRender);
+	}
 
-   @Override
-   public SummedArea summedArea() {
-      return new OglSummedArea();
-   }
+	@Override
+	public RawImage rawImage(boolean progressiveRender) {
+		return new OglRawImage(progressiveRender);
+	}
+	
+	@Override
+	public Interpolated interpolated(Interpolation interpolation) {
+		return new OglInterpolated(interpolation);
+	}
+	
+	@Override
+	public SummedArea summedArea() {
+		return new OglSummedArea();
+	}
 
-   @Override
-   public DRAParameters draParameters(boolean phasedDRA) {
-      return new OglDRAParameters(phasedDRA);
-   }
+	@Override
+	public DRAParameters draParameters(boolean phasedDRA) {
+		return new OglDRAParameters(phasedDRA);
+	}
 
-   @Override
-   public ToneTransferCurve toneTransferCurve() throws IOException {
-      return new OglToneTransferCurve();
-   }
+	@Override
+	public ToneTransferCurve toneTransferCurve() throws IOException {
+		return new OglToneTransferCurve();
+	}
+
+	@Override
+	public Mosaic mosaic(ImageWorld imageWorld, ELTDisplayContext displayContext, Consumer<Mosaic> initializeCallback) {
+		return new OglMosaic(imageWorld, displayContext, initializeCallback);
+	}   
 }

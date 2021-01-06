@@ -19,6 +19,6 @@ package com.leidoslabs.holeshot.elt.imageop;
 /**
  * Interface for GeometricTransform ImageOps
  */
-public interface GeometricTransform extends ImageOp {
+public interface GeometricTransform extends ImageOpPrimitive {
 
 }

@@ -72,8 +72,6 @@ def handle_metadata(event, context):
 
     output['thumbnailLink'] = output['imageLink'] +  '/' + str(message['maxRLevel']) + '/0/0/0.png'
 
-    output['sourceLocation'] = message['sourceLocation']
-
     for field in nitf_metadata:
         output[field] = nitf_metadata[field]
 

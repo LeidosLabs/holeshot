@@ -19,6 +19,6 @@ package com.leidoslabs.holeshot.elt.imageop;
 /**
  * Interface for BandCombine Operations
  */
-public interface BandCombine extends ImageOp {
+public interface BandCombine extends ImageOpPrimitive {
 
 }

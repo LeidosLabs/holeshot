@@ -1,0 +1,204 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: >
+  To deploy the dev stack use `sam deploy`
+  To deploy the primary stack use `sam deploy --config-env primary`
+  To deploy a custom stack, edit the file samconfig.toml to add your stack
+
+Globals:
+  Function:
+    Timeout: 180
+Parameters:
+  RolePermissionsBoundary:
+    Description: The DeveloperPolicy for creating IAM Roles
+    Type: String
+  ApiKeyId:
+    Description: API Key ID if you want to attach an existing one, else use 'None'
+    Default: None
+    Type: String
+  StackSuffix:
+    Description: The suffix that will be appended to all artifact names in the stack
+    Default: dev
+    Type: String
+  DeliveryStreamName:
+    Description: Name of delivery stream to read from
+    Type: String
+  ParentDNSName:
+    Description: The Parent Domainname to attach this stack to
+    Type: String
+  HostedZoneCertificateArn:
+    Description: The ARN to the Parent Domain's Certificate
+    Type: String
+  PublicZoneId:
+    Description: The Route53 Public Zone
+    Type: AWS::Route53::HostedZone::Id
+  PrimaryStack:
+    Description: true or false, this stack should be assigned the primary url
+    Default: 'false'
+    Type: String
+    AllowedValues:
+      - 'true'
+      - 'false'
+    ConstraintDescription: true or false
+  IpWhitelist:
+    Description: List of IPs to whitelist in API Gateway Resource Policy
+    Type: CommaDelimitedList
+
+Conditions:
+  IsPrimaryStack: !Equals [ !Ref PrimaryStack, 'true' ]
+  ProvidedApiKey: !Not [!Equals [ !Ref ApiKeyId, None ]]
+Resources:
+  API:
+    Type: AWS::Serverless::Api
+    Properties:
+      Name: !Sub telemetry-firehose-proxy-${StackSuffix}
+      Auth:
+        ApiKeyRequired: True
+        ResourcePolicy:
+          IpRangeWhitelist: !Ref IpWhitelist
+        UsagePlan:
+          Description: Usage Plan across Firehose Proxy API Resources
+          CreateUsagePlan: SHARED
+          UsagePlanName: !Sub TelemetryPlan-${StackSuffix}
+      Domain:
+        CertificateArn: !Ref HostedZoneCertificateArn
+        DomainName: !If
+          - IsPrimaryStack
+          - !Sub telemetry.${ParentDNSName}
+          - !Sub telemetry-${StackSuffix}.${ParentDNSName}
+        EndpointConfiguration: REGIONAL
+        Route53:
+          HostedZoneId: !Ref PublicZoneId
+      EndpointConfiguration:
+        Type: REGIONAL
+      StageName: !Sub telemetry-${StackSuffix}
+      DefinitionBody:
+        swagger: 2.0
+        info:
+          title: !Ref AWS::StackName
+          description: "Telemetry Firehose Proxy, allows writing to kinesis firehose through HTTP"
+          version: !Ref AWS::StackId
+        paths:
+          "/firehose":
+            post:
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+              security:
+              - api_key: []
+              x-amazon-apigateway-integration:
+                type: "aws"
+                credentials: !Sub "${TelemetryFirehoseRole.Arn}"
+                uri: !Sub "arn:aws:apigateway:${AWS::Region}:firehose:action/PutRecordBatch"
+                responses:
+                  default:
+                    statusCode: "200"
+                requestParameters:
+                  integration.request.header.Content-Type: "'application/x-amz-json-1.1'"
+                passthroughBehavior: "when_no_templates"
+                httpMethod: "POST"
+            options:
+              consumes:
+              - "application/json"
+              produces:
+              - "application/json"
+              responses:
+                "200":
+                  description: "200 response"
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: "string"
+                    Access-Control-Allow-Methods:
+                      type: "string"
+                    Access-Control-Allow-Headers:
+                      type: "string"
+              x-amazon-apigateway-integration:
+                type: "mock"
+                responses:
+                  default:
+                    statusCode: "200"
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'POST,OPTIONS'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,X-Amz-Date,Authorization,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                requestTemplates:
+                  application/json: "{\"statusCode\": 200}"
+                passthroughBehavior: "when_no_match"
+        securityDefinitions:
+          api_key:
+            type: "apiKey"
+            name: "x-api-key"
+            in: "header"
+        definitions:
+          Empty:
+            type: "object"
+            title: "Empty Schema"
+      MethodSettings:
+        -
+          ResourcePath: /*
+          HttpMethod: POST
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: ERROR
+        -
+          ResourcePath: /*
+          HttpMethod: OPTIONS
+          MetricsEnabled: true
+          DataTraceEnabled: true
+          LoggingLevel: ERROR
+  ProvidedAPIUsagePlanKey:
+    Type: AWS::ApiGateway::UsagePlanKey
+    DependsOn: API
+    Condition: ProvidedApiKey
+    Properties:
+      KeyId: !Ref ApiKeyId
+      KeyType: API_KEY
+      UsagePlanId: !Ref API.UsagePlan
+  TelemetryFirehoseRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub AADev-TelemetryFirehoseProxyRole-${StackSuffix}
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - firehose.amazonaws.com
+            Action:
+              - sts:AssumeRole
+          - Effect: Allow
+            Principal:
+              Service:
+                - apigateway.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      Path: /
+      PermissionsBoundary: !Ref RolePermissionsBoundary
+  TelemetryFirehosePolicy:
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName: !Sub AADev-TelemetryFirehoseProxyPolicy-${StackSuffix}
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Action:
+              - firehose:PutRecordBatch
+            Resource:
+              - !Sub arn:aws:firehose:*:*:deliverystream/${DeliveryStreamName}
+      Roles:
+        - !Ref TelemetryFirehoseRole
+Outputs:
+  RestApiId:
+    Description: The ID of the generated Rest Api
+    Value: !Ref API
+  StageName:
+    Description: The Stage Name, useful for attaching an API Key
+    Value: !Sub telemetry-${StackSuffix}

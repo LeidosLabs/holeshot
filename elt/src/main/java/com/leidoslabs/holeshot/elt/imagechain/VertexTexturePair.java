@@ -17,24 +17,25 @@
 package com.leidoslabs.holeshot.elt.imagechain;
 
 import org.joml.Vector3d;
+import org.joml.Vector3dc;
 
 /**
  * Vertex/Texture coordinate tuple
  */
 public class VertexTexturePair {
-  private Vector3d vertexCoord;
-  private Vector3d textureCoord;
+  private Vector3dc vertexCoord;
+  private Vector3dc textureCoord;
   
-  public VertexTexturePair(Vector3d vertexCoord, Vector3d textureCoord) {
+  public VertexTexturePair(Vector3dc vertexCoord, Vector3dc textureCoord) {
     this.vertexCoord = vertexCoord;
     this.textureCoord = textureCoord;
   }
 
-  public Vector3d getVertexCoord() {
+  public Vector3dc getVertexCoord() {
     return vertexCoord;
   }
 
-  public Vector3d getTextureCoord() {
+  public Vector3dc getTextureCoord() {
     return textureCoord;
   }
 }

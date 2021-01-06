@@ -1,0 +1,10 @@
+#!/bin/bash
+
+aws s3 ls s3://advanced-analytics-geo-tile-images/ | 
+grep $1 | 
+while read prefix
+do 
+   prefix=$(echo $prefix| sed 's#PRE \([^/]*\)/#\1#')
+   prefix2=$(aws s3 ls s3://advanced-analytics-geo-tile-images/$prefix/ | sed 's#\s*PRE \([^/]*\)/#\1#')
+   echo "\"$prefix/$prefix2\","
+done

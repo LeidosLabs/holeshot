@@ -19,6 +19,6 @@ package com.leidoslabs.holeshot.elt.imageop;
 /**
  * Interface for CumulativeHistogram Operations
  */
-public interface CumulativeHistogram extends ImageOp {
+public interface CumulativeHistogram extends ImageOpPrimitive {
 
 }

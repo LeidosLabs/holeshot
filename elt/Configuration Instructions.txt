@@ -1,0 +1,21 @@
+To enable access to the tileserver, you will need to create a folder in your home directory called .holeshot
+Place in it a file ~/.holeshot/holeshot.properties with the properties below.
+
+The only required property is holeshot_tileservice_key which provides access to the tileserver imagery and metadata.
+
+Currently there is no user database, so any name will work. It is used to correlate a user with their image viewing
+activity in the experimental predictive caching module. Setting your username to "anonymous" or leaving the property
+out will disable these analytics functions.
+
+No data is collected outside your own deployment of holeshot, and it relies on the infrastructure you deploy to function
+
+###################################################################
+
+holeshot_tileservice_url=<tileserver-endpoint-url>
+holeshot_tileservice_key=<your-tileservice-api-key>
+holeshot_telemetry_enabled=<true|false>
+holeshot_user_id=<your username>
+holeshot_telemetry_url=<firehose-proxy-url>
+holeshot_telemetry_api_key=<firehose-proxy-api-key>
+holeshot_analytics_url=<analytics-warehouse-url>
+holeshot_analytics_key=<your-analytics-warehouse-key>

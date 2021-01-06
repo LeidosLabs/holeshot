@@ -20,6 +20,7 @@ import java.net.URL;
 import java.security.InvalidParameterException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+
 import org.image.common.cache.CacheableUtil;
 
 
@@ -37,6 +38,19 @@ public class TileserverUrlBuilder {
   public TileserverUrlBuilder(URL imageMetadataURL) {
     this.imageMetadataURL = String.valueOf(imageMetadataURL);
     validateMetadataURL();
+  }
+  
+  public static URL getImageMetadataURL(URL baseURL) throws MalformedURLException {
+	  return new URL(getImageMetadataURLString(baseURL.toString()));
+  }
+  public static URL getImageMetadataURL(String baseURLString) throws MalformedURLException {
+	  return new URL(getImageMetadataURLString(baseURLString));
+  }
+  public static String getImageMetadataURLString(URL baseURL) {
+	  return getImageMetadataURLString(baseURL.toString());
+  }
+  public static String getImageMetadataURLString(String baseURL) {
+	  return String.format("%s/metadata.json", baseURL);
   }
 
   public String getImageMetadataURL() {

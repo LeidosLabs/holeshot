@@ -23,61 +23,62 @@ import java.io.IOException;
 import org.image.common.util.CloseableUtils;
 
 import com.leidoslabs.holeshot.elt.ELTDisplayContext;
-import com.leidoslabs.holeshot.elt.coord.ImageWorld;
 import com.leidoslabs.holeshot.elt.imagechain.Framebuffer;
+import com.leidoslabs.holeshot.elt.utils.GeometryUtils;
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
 
 /**
  * Abstract class representing a Renderer of some data. Provides a resultant
  * FrameBuffer.
- * Known implementations: ImageChaain, PLacemarkRenderer, PolygonRenderer
+ * Known implementations: ImageChain, PLacemarkRenderer, PolygonRenderer
  * @param <T>
  */
 public abstract class Renderer<T> implements Closeable {
 
-    private final ImageWorld imageWorld;
-    private final ELTDisplayContext eltDisplayContext;
-    private Framebuffer fb;
+	private final ImageWorld imageWorld;
+	private final ELTDisplayContext eltDisplayContext;
+	private Framebuffer fb;
 
-    /**
-     * Constructor
-     * @param imageWorld viewport model for ELTCanvas
-     * @param eltDisplayContext 
-     */
-    public Renderer(ImageWorld imageWorld, ELTDisplayContext eltDisplayContext) {
-        this.imageWorld = imageWorld;
-        this.eltDisplayContext = eltDisplayContext;
-    }
+	/**
+	 * Constructor
+	 * @param imageWorld viewport model for ELTCanvas
+	 * @param eltDisplayContext 
+	 */
+	public Renderer(ImageWorld imageWorld, ELTDisplayContext eltDisplayContext) {
+		this.imageWorld = imageWorld;
+		this.eltDisplayContext = eltDisplayContext;
+	}
 
-    public ImageWorld getImageWorld() {
-        return this.imageWorld;
-    }
+	public ImageWorld getImageWorld() {
+		return this.imageWorld;
+	}
 
-    public Dimension getViewportDimensions() {
-        return new Dimension((int)imageWorld.getCurrentViewport().getWidth(), (int)imageWorld.getCurrentViewport().getHeight());
-    }
+	public Dimension getViewportDimensions() {
+		return GeometryUtils.toDimension(imageWorld.getCurrentViewport());
+	}
 
-    public void setFramebuffer(Framebuffer fb) {
-        this.fb = fb;
-    }
+	public void setFramebuffer(Framebuffer fb) {
+		this.fb = fb;
+	}
 
-    /**
-     * @return Resultant FrameBuffer
-     */
-    public Framebuffer getResultFramebuffer() {
-        return fb;
-    }
-    public ELTDisplayContext getELTDisplayContext() {
-       return eltDisplayContext;
-    }
+	/**
+	 * @return Resultant FrameBuffer
+	 */
+	public Framebuffer getResultFramebuffer() {
+		return fb;
+	}
+	public ELTDisplayContext getELTDisplayContext() {
+		return eltDisplayContext;
+	}
 
-    public abstract void render(T data) throws IOException;
+	public abstract void render(T data) throws Exception;
 
-   public boolean isFullyRendered() {
-      return true;
-   }
+	public boolean isFullyRendered() {
+		return true;
+	}
 
-   @Override
-   public void close() throws IOException {
-      CloseableUtils.close(fb);
-   }
+	@Override
+	public void close() throws IOException {
+		CloseableUtils.close(fb);
+	}
 }

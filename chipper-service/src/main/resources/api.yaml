@@ -19,8 +19,8 @@ paths:
     get:
       tags:
         - developers
-      summary: Load an image to the viewer
-      operationId: loadImage
+      summary: Chip image by image space bounding box
+      operationId: chip
       description: |
         Creates a chip of an image
       parameters:
@@ -42,6 +42,120 @@ paths:
           required: true
           schema:
             type: string
+        - in: query
+          name: lockHistogramToOverview
+          description: If true, use the histogram from the overview rather than the histogram for the chip.
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Image chip in PNG format
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+  /chipByGeoPoint:
+    get:
+      tags:
+        - developers
+      summary: Chip image by image space bounding box
+      operationId: chip
+      description: |
+        Creates a chip of an image
+      parameters:
+        - in: query
+          name: url
+          description: The url to the metadata.json for the image
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: center
+          description: The center of the chip to be made
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: radius
+          description: The radius in meters
+          required: true
+          schema:
+            type: number
+        - in: query
+          name: outDim
+          description: The output Dimension width,height (e.g. 256,256 )
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lockHistogramToOverview
+          description: If true, use the histogram from the overview rather than the histogram for the chip.
+          required: false
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: Image chip in PNG format
+          content:
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+  /chipByGeoEnvelope:
+    get:
+      tags:
+        - developers
+      summary: Chip image by image space bounding box
+      operationId: chip
+      description: |
+        Creates a chip of an image
+      parameters:
+        - in: query
+          name: url
+          description: The url to the metadata.json for the image
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: envelope
+          description: The geodetic envelope to chip out (e.g. x1,x2,y1,y2)
+          required: true
+          schema:
+            type: string
+            items:
+               type: string
+        - in: query
+          name: outDim
+          description: The output Dimension width,height (e.g. 256,256 )
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lockHistogramToOverview
+          description: If true, use the histogram from the overview rather than the histogram for the chip.
+          required: false
+          schema:
+            type: boolean
       responses:
         '200':
           description: Image chip in PNG format

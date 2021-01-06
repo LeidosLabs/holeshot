@@ -1,6 +1,6 @@
 {
     "Parameters": {
-       "NameSuffix": {
+       "StackSuffix": {
           "Description": "Suffix that will be appended to all stack components",
           "Type": "String"
         },
@@ -36,7 +36,7 @@
         "ImageCatalogES": {
             "Type": "AWS::Elasticsearch::Domain",
             "Properties": {
-                "DomainName": {"Fn::Sub": "image-catalog-${NameSuffix}"},
+                "DomainName": {"Fn::Sub": "image-catalog-${StackSuffix}"},
                 "EBSOptions": {
                     "EBSEnabled": "true",
                     "VolumeSize": { "Ref": "NodeVolumeSize" },
@@ -59,6 +59,22 @@
                     "rest.action.multi.allow_explicit_index": true,
                     "indices.fielddata.cache.size": 40,
                     "indices.query.bool.max_clause_count": 1024
+                },
+                "AccessPolicies": {
+                    "Version": "2012-10-17",
+                    "Statement": [{
+                            "Effect": "Allow",
+                            "Principal": {
+                                "AWS": "*"
+                            },
+                            "Action": "es:*",
+                            "Resource": {
+                                "Fn::Join": [
+                                    ":",
+                                    ["arn", {"Ref": "AWS::Partition"}, "es", { "Ref": "AWS::Region" }, { "Ref": "AWS::AccountId" }, { "Fn::Sub": "domain/image-catalog-${StackSuffix}/*" } ]
+                                ]
+                            }
+                        }]
                 }
             }
         }

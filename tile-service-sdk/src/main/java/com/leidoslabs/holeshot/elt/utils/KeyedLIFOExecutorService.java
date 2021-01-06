@@ -30,121 +30,150 @@ import java.util.concurrent.TimeUnit;
  * An executor service that executes tasks on a LIFO basis, typically based on system time
  */
 public class KeyedLIFOExecutorService extends ThreadPoolExecutor {
-   private ConcurrentHashMap<String, KeyedFutureTask<?>> tasksInProgress;
+	private ConcurrentHashMap<String, KeyedFutureTask<?>> tasksInProgress;
 
-   /**
-    * A Comparable future task with priority
-    * @param <T> Return type of runnable task
-    */
-   private static class KeyedFutureTask<T> extends FutureTask<T> implements Comparable<KeyedFutureTask<T>> {
-      private long priority = 0;
-      private String key;
-      private Future<?> future;
+	/**
+	 * A Comparable future task with priority
+	 * @param <T> Return type of runnable task
+	 */
+	private static class KeyedFutureTask<T> extends FutureTask<T> implements Comparable<KeyedFutureTask<T>> {
+		private long priority = 0;
+		private String key;
+		private Future<?> future;
 
 
-      public KeyedFutureTask(Runnable runnable, T result, long priority, String key) {
-         super(runnable, result);
-         this.priority = priority;
-         this.key = key;
-      }
-      public KeyedFutureTask(Callable<T> callable, long priority, String key) {
-         super(callable);
-         this.priority = priority;
-         this.key = key;
-      }
-      public void setPriority(long priority) {
-         this.priority = priority;
-      }
-      public String getKey() {
-         return key;
-      }
-      @Override
-      public int compareTo(KeyedFutureTask<T> o) {
-         return Long.valueOf(o.priority).compareTo(priority);
-      }
-      public Future<?> getFuture() {
-         return future;
-      }
-      public void setFuture(Future<?> future) {
-         this.future = future;
-      }
-   }
+		public KeyedFutureTask(Runnable runnable, T result, long priority, String key) {
+			super(runnable, result);
+			this.priority = priority;
+			this.key = key;
+		}
+		public KeyedFutureTask(Callable<T> callable, long priority, String key) {
+			super(callable);
+			this.priority = priority;
+			this.key = key;
+		}
+		public void setPriority(long priority) {
+			this.priority = priority;
+		}
+		public String getKey() {
+			return key;
+		}
 
-   @Override
-   protected void afterExecute(Runnable r, Throwable t) {
-      super.afterExecute(r, t);
-      KeyedFutureTask newTask = (KeyedFutureTask)r;
-      tasksInProgress.remove(newTask.key);
-   }
+		@Override
+		public synchronized void run() {
+			super.run();
+		}
 
-   private KeyedLIFOExecutorService(int corePoolSize, int maximumPoolSize,
-         long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue) {
-      super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue);
+		@Override
+		public int compareTo(KeyedFutureTask<T> o) {
+			return Long.valueOf(o.priority).compareTo(priority);
+		}
+		public Future<?> getFuture() {
+			return future;
+		}
+		public void setFuture(Future<?> future) {
+			this.future = future;
+		}
+	}
 
-      this.tasksInProgress = new ConcurrentHashMap<String, KeyedFutureTask<?>>();
-   }
-   /**
-    * Utility method to create thread pool easily
-    * @param nThreads
-    * @return
-    */
-   public static KeyedLIFOExecutorService newFixedThreadPool(int nThreads) {
-      return new KeyedLIFOExecutorService(nThreads, nThreads, Long.MAX_VALUE,
-            TimeUnit.MILLISECONDS, new PriorityBlockingQueue<Runnable>());
-   }
-   @Override
-   protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
-      return (RunnableFuture<T>) callable;
-   }
+	@Override
+	protected void beforeExecute(Thread t, Runnable r) {
+		// TODO Auto-generated method stub
+		super.beforeExecute(t, r);
+		KeyedFutureTask newTask = (KeyedFutureTask)r;
+	}
+	@Override
+	protected void afterExecute(Runnable r, Throwable t) {
+		super.afterExecute(r, t);
+		KeyedFutureTask newTask = (KeyedFutureTask)r;
+		tasksInProgress.remove(newTask.key);
+	}
 
-   @Override
-   protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
-      return (RunnableFuture<T>) runnable;
-   }
+	private KeyedLIFOExecutorService(int corePoolSize, int maximumPoolSize,
+			long keepAliveTime, TimeUnit unit, BlockingQueue<Runnable> workQueue) {
+		super(corePoolSize, maximumPoolSize, keepAliveTime, unit, workQueue);
 
-   /**
-    * Submit with New comparable task
-    */
-   public synchronized Future<?> submit(Runnable task) {
-      if (!(task instanceof KeyedFutureTask)) {
-         throw new IllegalArgumentException(String.format("%s can only receive tasks of type %s, not %s", KeyedLIFOExecutorService.class.getName(), KeyedFutureTask.class.getName(), task.getClass().getName()));
-      }
-      KeyedFutureTask newTask = (KeyedFutureTask)task;
-      KeyedFutureTask existingTask = tasksInProgress.get(newTask.getKey());
-      Future<?> result = null;
-      if (existingTask == null) {
-         tasksInProgress.put(newTask.getKey(), newTask);
-         result = super.submit(newTask);
-         newTask.setFuture(result);
-      } else {
-         existingTask.setPriority(newTask.priority);
-         result = existingTask.getFuture();
-      }
-      return result;
-   }
-   /**
-    * execute with New comparable task
-    */
-   public void execute(Runnable command) {
-      super.execute(command);
-   }
+		this.tasksInProgress = new ConcurrentHashMap<String, KeyedFutureTask<?>>();
+	}
+	/**
+	 * Utility method to create thread pool easily
+	 * @param nThreads
+	 * @return
+	 */
+	public static KeyedLIFOExecutorService newFixedThreadPool(int nThreads) {
+		return new KeyedLIFOExecutorService(nThreads, nThreads, Long.MAX_VALUE,
+				TimeUnit.MILLISECONDS, new PriorityBlockingQueue<Runnable>());
+	}
+	@Override
+	protected <T> RunnableFuture<T> newTaskFor(Callable<T> callable) {
+		return (RunnableFuture<T>) callable;
+	}
 
-   /**
-    * Submit with New comparable task
-    * @param key
-    * @param task
-    * @return
-    */
-   public Future<?> submit(String key, Runnable task) {
-      return this.submit(new KeyedFutureTask(task, null, System.currentTimeMillis(), key));
-   }
-   
-   /**
-    * execute with New comparable task
-    * @param key
-    * @param command
-    */
-   public void execute(String key, Runnable command) {
-      this.execute(new KeyedFutureTask(command, null, System.currentTimeMillis(), key));
-   }
+	@Override
+	protected <T> RunnableFuture<T> newTaskFor(Runnable runnable, T value) {
+		return (RunnableFuture<T>) runnable;
+	}
+
+	public boolean isInProcess(String key) {
+		return tasksInProgress.containsKey(key); 
+	}
+
+	/**
+	 * Submit with New comparable task
+	 */
+	public synchronized Future<?> submit(Runnable task) {
+		if (!(task instanceof KeyedFutureTask)) {
+			throw new IllegalArgumentException(String.format("%s can only receive tasks of type %s, not %s", KeyedLIFOExecutorService.class.getName(), KeyedFutureTask.class.getName(), task.getClass().getName()));
+		}
+		KeyedFutureTask newTask = (KeyedFutureTask)task;
+		final String key = newTask.getKey();
+		KeyedFutureTask existingTask = tasksInProgress.get(key);
+		Future<?> result = null;
+		if (existingTask == null) {
+			tasksInProgress.put(key, newTask);
+			result = super.submit(newTask);
+			newTask.setFuture(result);
+		} else {
+			result = existingTask.getFuture();
+			if (result != null && !result.isCancelled() && !result.isDone()) {
+				if (newTask.priority <= existingTask.priority) {
+					remove(existingTask);
+					existingTask.setPriority(newTask.priority);
+					result = super.submit(existingTask);
+					existingTask.setFuture(result);
+				}
+			} 
+		}
+		return result;
+	}
+	/**
+	 * execute with New comparable task
+	 */
+	public void execute(Runnable command) {
+		super.execute(command);
+	}
+
+	/**
+	 * Submit with New comparable task
+	 * @param key
+	 * @param task
+	 * @return
+	 */
+	public Future<?> submit(String key, Runnable task) {
+		return this.submit(new KeyedFutureTask(task, null, System.currentTimeMillis(), key));
+	}
+
+
+	public Future<?> submit(String key, Runnable task, long priority){
+		return this.submit(new KeyedFutureTask(task, null, priority, key));
+	}
+
+	/**
+	 * execute with New comparable task
+	 * @param key
+	 * @param command
+	 */
+	public void execute(String key, Runnable command) {
+		this.execute(new KeyedFutureTask(command, null, System.currentTimeMillis(), key));
+	}
 }

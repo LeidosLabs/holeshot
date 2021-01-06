@@ -51,7 +51,6 @@ import static org.lwjgl.opengl.GL30.glBindVertexArray;
 import static org.lwjgl.opengl.GL31.glDrawArraysInstanced;
 
 import java.awt.Dimension;
-import java.awt.Rectangle;
 import java.io.IOException;
 import java.nio.FloatBuffer;
 import java.util.Arrays;
@@ -59,8 +58,9 @@ import java.util.Arrays;
 import org.apache.commons.lang3.tuple.Pair;
 import org.image.common.util.CloseableUtils;
 import org.lwjgl.BufferUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
-import com.google.common.collect.Streams;
 import com.leidoslabs.holeshot.elt.ELTDisplayContext;
 import com.leidoslabs.holeshot.elt.gpuimage.GLInternalFormat;
 import com.leidoslabs.holeshot.elt.gpuimage.HistogramType;
@@ -76,256 +76,254 @@ import com.leidoslabs.holeshot.elt.imageop.Histogram;
 /**
  * OpenGL operation for retrieving parameters for DRA
  */
-class OglDRAParameters extends OglAbstractImageOp implements DRAParameters {
-   private static final Dimension FB_DIMENSION = new Dimension(1,1);
+class OglDRAParameters extends OglAbstractImageOpPrimitive implements DRAParameters {
+	private static final Logger LOGGER = LoggerFactory.getLogger(OglDRAParameters.class);
 
-   // This is the well-known value that the position sampler is set/found in by the vertex shader.
-   private static final boolean DEBUG = false;
-   protected static final int POSITION_ATTRIBUTE = 0;
-   public static final float DEFAULT_MAX_ADJUST_PER_FRAME = 5E-05f;
+	private static final Dimension FB_DIMENSION = new Dimension(1,1);
 
-   private CumulativeHistogram cumulativeHistogram;
-   private ShaderProgram eFirstShader;
-   private ShaderProgram eMinShader;
-   private ShaderProgram eMaxShader;
-   private ShaderProgram eLastShader;
+	// This is the well-known value that the position sampler is set/found in by the vertex shader.
+	private static final boolean DEBUG = false;
+	protected static final int POSITION_ATTRIBUTE = 0;
+	public static final float DEFAULT_MAX_ADJUST_PER_FRAME = 5E-05f;
+	public static final String EFIRST_SHADER_KEY = String.format("%s::eFirst", OglDRAParameters.class.getName());
+	public static final String EMIN_SHADER_KEY = String.format("%s::eMin", OglDRAParameters.class.getName());
+	public static final String EMAX_SHADER_KEY = String.format("%s::eMax", OglDRAParameters.class.getName());
+	public static final String ELAST_SHADER_KEY = String.format("%s::eLast", OglDRAParameters.class.getName());
 
-   private VertexArrayObject cumulativeHistogramVAO;
+	private CumulativeHistogram cumulativeHistogram;
 
-   private Histogram histogram;
-   private PingPongFramebuffer eFirstFramebuffer;
-   private PingPongFramebuffer eMinFramebuffer;
-   private PingPongFramebuffer eMaxFramebuffer;
-   private PingPongFramebuffer eLastFramebuffer;
+	private VertexArrayObject cumulativeHistogramVAO;
 
-   private float[] debugFramebufferData;
+	private Histogram histogram;
+	private PingPongFramebuffer eFirstFramebuffer;
+	private PingPongFramebuffer eMinFramebuffer;
+	private PingPongFramebuffer eMaxFramebuffer;
+	private PingPongFramebuffer eLastFramebuffer;
 
-   private FloatBuffer debugFramebufferBuffer;
-   private final FloatBuffer pointInstance;
-   private float maxAdjustPerFrame;
-   private boolean phasedDRAAdjustmentEnabled;
+	private float[] debugFramebufferData;
 
-
-   public OglDRAParameters(boolean phasedDRA) {
-      pointInstance = BufferUtils.createFloatBuffer(4);
-      phasedDRAAdjustmentEnabled = phasedDRA;
-      maxAdjustPerFrame = DEFAULT_MAX_ADJUST_PER_FRAME;
-   }
-
-   @Override
-   public Framebuffer getResultFramebuffer() {
-      return getEFirstFramebuffer().getDestination();
-   }
-   @Override
-   public PingPongFramebuffer getEMaxFramebuffer() {
-      return this.eMaxFramebuffer;
-   }
-   @Override
-   public PingPongFramebuffer getEMinFramebuffer() {
-      return this.eMinFramebuffer;
-   }
-   @Override
-   public PingPongFramebuffer getEFirstFramebuffer() {
-      return this.eFirstFramebuffer;
-   }
-   @Override
-   public PingPongFramebuffer getELastFramebuffer() {
-      return this.eLastFramebuffer;
-   }
-
-   @Override
-   protected void doRender() throws IOException {
-      initialize();
-
-      runShader(eFirstShader, eFirstFramebuffer, null, GL_MIN, getImage().getMaxPixelValue());
-      runShader(eLastShader, eLastFramebuffer, null, GL_MAX, 0.0f);
-      runShader(eMinShader, eMinFramebuffer, Pair.of("eFirstTexture", eFirstFramebuffer), GL_MIN, getImage().getMaxPixelValue());
-      runShader(eMaxShader, eMaxFramebuffer, Pair.of("eLastTexture", eLastFramebuffer), GL_MAX, 0.0f);
-
-      if (DEBUG) {
-         dumpResults();
-      }
-   }
-
-   private void dumpResults() {
-      final String eFirst = rgbToString(getResult(eFirstFramebuffer));
-      final String eLast = rgbToString(getResult(eLastFramebuffer));
-      final String eMin = rgbToString(getResult(eMinFramebuffer));
-      final String eMax = rgbToString(getResult(eMaxFramebuffer));
-      System.out.println(String.format("eFirst = %s eLast = %s eMin = %s eMax = %s", eFirst, eLast, eMin, eMax));
-   }
-   private static String rgbToString(float[] rgb) {
-      return Arrays.toString(rgb);
-   }
-   private float[] getResult(PingPongFramebuffer fb) {
-      fb.getDestination().readFramebuffer(debugFramebufferBuffer, debugFramebufferData);
-      return Arrays.copyOf(debugFramebufferData, 3);
-   }
-
-   private void runShader(ShaderProgram shader, PingPongFramebuffer framebuffer, Pair<String, PingPongFramebuffer> inputTexture, int blendEquation, float clearColor) {
-      try {
-         // Bind to buffer for Writing
-         framebuffer.swap();
-         framebuffer.getDestination().bind();
-
-         glViewport(0, 0,  getWidth(), getHeight());
-
-         glEnable(GL_ALPHA_TEST);
-         glClearColor(clearColor, clearColor, clearColor, 1.0f);
-         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-         glEnable(GL_BLEND);
-         glBlendFuncSeparate(GL_ONE, GL_ONE, GL_CONSTANT_ALPHA, GL_CONSTANT_ALPHA);
-         glBlendEquationSeparate(blendEquation, GL_MAX);
-         glBlendColor(0.0f, 0.0f, 0.0f, 1.0f);
-
-         glBindVertexArray(cumulativeHistogramVAO.getVao());
-
-         glActiveTexture(GL_TEXTURE3);
-         glBindTexture(GL_TEXTURE_2D, cumulativeHistogram.getResultFramebuffer().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
-
-         if (inputTexture != null) {
-            glActiveTexture(GL_TEXTURE4);
-            glBindTexture(GL_TEXTURE_2D, inputTexture.getRight().getDestination().getTexture().getId());
-            glActiveTexture(GL_TEXTURE0);
-         }
-
-         glActiveTexture(GL_TEXTURE5);
-         glBindTexture(GL_TEXTURE_2D, framebuffer.getSource().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
-
-         shader.useProgram();
-
-         // Set the texture that the vertex shader should read from
-         glUniform1i(shader.getUniformLocation("cumulativeHistogram"), 3);
-         if (inputTexture != null) {
-            glUniform1i(shader.getUniformLocation(inputTexture.getLeft()), 4);
-         }
-         glUniform1i(shader.getUniformLocation("lastResult"), 5);
-         glUniform2iv(shader.getUniformLocation("fbDim"), new int[] { FB_DIMENSION.width, FB_DIMENSION.height});
-         final Dimension histDim = getCumulativeHistogram().getResultFramebuffer().getSize();
-         glUniform2iv(shader.getUniformLocation("histDim"), new int[] { histDim.width, histDim.height});
+	private FloatBuffer debugFramebufferBuffer;
+	private final FloatBuffer pointInstance;
+	private float maxAdjustPerFrame;
+	private boolean phasedDRAAdjustmentEnabled;
 
 
-         glUniform1i(shader.getUniformLocation("histogramDownsampling"), histogram.getDownsamplingFactor());
+	public OglDRAParameters(boolean phasedDRA) {
+		pointInstance = BufferUtils.createFloatBuffer(4);
+		phasedDRAAdjustmentEnabled = phasedDRA;
+		maxAdjustPerFrame = DEFAULT_MAX_ADJUST_PER_FRAME;
+	}
 
-         glUniform1i(shader.getUniformLocation("buckets"), histogram.getBuckets());
-         glUniform1i(shader.getUniformLocation("maxPixel"), getImage().getMaxPixelValue());
+	@Override
+	public Framebuffer getResultFramebuffer() {
+		return getEFirstFramebuffer().getDestination();
+	}
+	@Override
+	public PingPongFramebuffer getEMaxFramebuffer() {
+		return this.eMaxFramebuffer;
+	}
+	@Override
+	public PingPongFramebuffer getEMinFramebuffer() {
+		return this.eMinFramebuffer;
+	}
+	@Override
+	public PingPongFramebuffer getEFirstFramebuffer() {
+		return this.eFirstFramebuffer;
+	}
+	@Override
+	public PingPongFramebuffer getELastFramebuffer() {
+		return this.eLastFramebuffer;
+	}
 
-         final ImageChainSettings ic = getImageSource().getSettings();
-         glUniform1f(shader.getUniformLocation("ic_pmin"), ic.getpMin());
-         glUniform1f(shader.getUniformLocation("ic_pmax"), ic.getpMax());
-         glUniform1f(shader.getUniformLocation("maxAdjustPerFrame"), phasedDRAAdjustmentEnabled ? maxAdjustPerFrame : -1.0f);
+	@Override
+	protected void doRender() throws Exception {
+		initialize();
 
-         // Indicate at which points in the texture that the vertex shader should sample at
-         glDrawArraysInstanced(GL_POINTS, 0, 1, getImage().getMaxPixelValue());
+        ShaderProgram eFirstShader = getELTDisplayContext().getShader(EFIRST_SHADER_KEY, HistogramType.class, HistogramType.Shaders.ALL_FOR_ONE_SHADER, HistogramType.Shaders.EFIRST_SHADER);
+		ShaderProgram eMinShader = getELTDisplayContext().getShader(EMIN_SHADER_KEY, HistogramType.class, HistogramType.Shaders.ALL_FOR_ONE_SHADER, HistogramType.Shaders.EMIN_SHADER);
+		ShaderProgram eMaxShader = getELTDisplayContext().getShader(EMAX_SHADER_KEY, HistogramType.class, HistogramType.Shaders.ALL_FOR_ONE_SHADER, HistogramType.Shaders.EMAX_SHADER);
+		ShaderProgram eLastShader = getELTDisplayContext().getShader(ELAST_SHADER_KEY, HistogramType.class, HistogramType.Shaders.ALL_FOR_ONE_SHADER, HistogramType.Shaders.ELAST_SHADER);
+		
+		runShader(eFirstShader, eFirstFramebuffer, null, GL_MIN, getImage().getMaxPixelValue());
+		runShader(eLastShader, eLastFramebuffer, null, GL_MAX, 0.0f);
+		runShader(eMinShader, eMinFramebuffer, Pair.of("eFirstTexture", eFirstFramebuffer), GL_MIN, getImage().getMaxPixelValue());
+		runShader(eMaxShader, eMaxFramebuffer, Pair.of("eLastTexture", eLastFramebuffer), GL_MAX, 0.0f);
 
-         glUseProgram(0);
-      } finally {
-         glUseProgram(0);
+		if (DEBUG) {
+			dumpResults();
+		}
+	}
 
-         glBindVertexArray(0);
-         glBindBuffer(GL_ARRAY_BUFFER, 0);
-         framebuffer.getDestination().unbind();
-         glDisable(GL_BLEND);
+	private void dumpResults() {
+		final String eFirst = rgbToString(getResult(eFirstFramebuffer));
+		final String eLast = rgbToString(getResult(eLastFramebuffer));
+		final String eMin = rgbToString(getResult(eMinFramebuffer));
+		final String eMax = rgbToString(getResult(eMaxFramebuffer));
+		System.out.println(String.format("eFirst = %s eLast = %s eMin = %s eMax = %s", eFirst, eLast, eMin, eMax));
+	}
+	private static String rgbToString(float[] rgb) {
+		return Arrays.toString(rgb);
+	}
+	private float[] getResult(PingPongFramebuffer fb) {
+		fb.getDestination().readFramebuffer(debugFramebufferBuffer, debugFramebufferData);
+		return Arrays.copyOf(debugFramebufferData, 3);
+	}
 
-      }
+	private void runShader(ShaderProgram shader, PingPongFramebuffer framebuffer, Pair<String, PingPongFramebuffer> inputTexture, int blendEquation, float clearColor) throws IOException {
+		try {
+			// Bind to buffer for Writing
+			framebuffer.swap();
+			framebuffer.getDestination().bind();
 
-   }
+			glViewport(0, 0,  getWidth(), getHeight());
 
-   private CumulativeHistogram getCumulativeHistogram() {
-      if (cumulativeHistogram == null) {
-         cumulativeHistogram = this.getImageChain().getPreviousImageOp(this, CumulativeHistogram.class);
-      }
-      return cumulativeHistogram;
-   }
-   private int getHeight() {
-      return getSize().height;
-   }
+			glEnable(GL_ALPHA_TEST);
+			glClearColor(clearColor, clearColor, clearColor, 1.0f);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-   private Histogram getHistogram() {
-      if (histogram == null) {
-         histogram = this.getImageChain().getPreviousImageOp(this, Histogram.class);
-      }
-      return histogram;
-   }
+			glEnable(GL_BLEND);
+			glBlendFuncSeparate(GL_ONE, GL_ONE, GL_CONSTANT_ALPHA, GL_CONSTANT_ALPHA);
+			glBlendEquationSeparate(blendEquation, GL_MAX);
+			glBlendColor(0.0f, 0.0f, 0.0f, 1.0f);
 
-   private Dimension getSize() {
-      return FB_DIMENSION;
-   }
-   private int getWidth() {
-      return getSize().width;
-   }
+			glBindVertexArray(cumulativeHistogramVAO.getVao());
 
-   private void allocateVAO(Framebuffer framebuffer) {
-      if (cumulativeHistogramVAO == null) {
-         cumulativeHistogramVAO = new VertexArrayObject(pointInstance, new Dimension(1,1), POSITION_ATTRIBUTE);
-      }
-   }
+			glActiveTexture(GL_TEXTURE3);
+			glBindTexture(GL_TEXTURE_2D, cumulativeHistogram.getResultFramebuffer().getTexture().getId());
+			glActiveTexture(GL_TEXTURE0);
 
-   public void destroy() {
-      glDeleteBuffers(cumulativeHistogramVAO.getVao());
-   }
+			if (inputTexture != null) {
+				glActiveTexture(GL_TEXTURE4);
+				glBindTexture(GL_TEXTURE_2D, inputTexture.getRight().getDestination().getTexture().getId());
+				glActiveTexture(GL_TEXTURE0);
+			}
+
+			glActiveTexture(GL_TEXTURE5);
+			glBindTexture(GL_TEXTURE_2D, framebuffer.getSource().getTexture().getId());
+			glActiveTexture(GL_TEXTURE0);
+
+			shader.useProgram();
+
+			// Set the texture that the vertex shader should read from
+			glUniform1i(shader.getUniformLocation("cumulativeHistogram"), 3);
+			if (inputTexture != null) {
+				glUniform1i(shader.getUniformLocation(inputTexture.getLeft()), 4);
+			}
+			glUniform1i(shader.getUniformLocation("lastResult"), 5);
+			glUniform2iv(shader.getUniformLocation("fbDim"), new int[] { FB_DIMENSION.width, FB_DIMENSION.height});
+			final Dimension histDim = getCumulativeHistogram().getResultFramebuffer().getSize();
+			glUniform2iv(shader.getUniformLocation("histDim"), new int[] { histDim.width, histDim.height});
 
 
-   private void initialize() throws IOException {
-      if (eFirstFramebuffer == null) {
-         histogram = getHistogram();
-         cumulativeHistogram = getCumulativeHistogram();
+			glUniform1i(shader.getUniformLocation("histogramDownsampling"), histogram.getDownsamplingFactor());
 
-         final ELTDisplayContext eltDisplayContext = getELTDisplayContext();
-         eFirstFramebuffer = new PingPongFramebuffer(FB_DIMENSION, GLInternalFormat.GlInternalFormatRGB32F, eltDisplayContext);
-         eMinFramebuffer = new PingPongFramebuffer(FB_DIMENSION, GLInternalFormat.GlInternalFormatRGB32F, eltDisplayContext);
-         eMaxFramebuffer = new PingPongFramebuffer(FB_DIMENSION, GLInternalFormat.GlInternalFormatRGB32F, eltDisplayContext);
-         eLastFramebuffer = new PingPongFramebuffer(FB_DIMENSION, GLInternalFormat.GlInternalFormatRGB32F, eltDisplayContext);
+			glUniform1i(shader.getUniformLocation("buckets"), histogram.getBuckets());
+			glUniform1i(shader.getUniformLocation("maxPixel"), getImage().getMaxPixelValue());
 
-         //         Arrays.asList(eFirstFramebuffer, eMinFramebuffer, eMaxFramebuffer, eLastFramebuffer)
-         //         .stream().forEach(fb->setFramebufferUninitialized(fb));
+			final ImageChainSettings ic = getImageSource().getSettings();
+			glUniform1f(shader.getUniformLocation("ic_pmin"), ic.getpMin());
+			glUniform1f(shader.getUniformLocation("ic_pmax"), ic.getpMax());
+			glUniform1f(shader.getUniformLocation("maxAdjustPerFrame"), phasedDRAAdjustmentEnabled ? maxAdjustPerFrame : -1.0f);
 
-         this.eFirstShader = new ShaderProgram(HistogramType.class, HistogramType.Shaders.ALL_FOR_ONE_SHADER, HistogramType.Shaders.EFIRST_SHADER);
-         this.eMinShader = new ShaderProgram(HistogramType.class, HistogramType.Shaders.ALL_FOR_ONE_SHADER, HistogramType.Shaders.EMIN_SHADER);
-         this.eMaxShader = new ShaderProgram(HistogramType.class, HistogramType.Shaders.ALL_FOR_ONE_SHADER, HistogramType.Shaders.EMAX_SHADER);
-         this.eLastShader = new ShaderProgram(HistogramType.class, HistogramType.Shaders.ALL_FOR_ONE_SHADER, HistogramType.Shaders.ELAST_SHADER);
-         allocateVAO(cumulativeHistogram.getResultFramebuffer());
+			// Indicate at which points in the texture that the vertex shader should sample at
+			glDrawArraysInstanced(GL_POINTS, 0, 1, getImage().getMaxPixelValue());
 
-         debugFramebufferData = new float[3];
-         debugFramebufferBuffer = BufferUtils.createFloatBuffer(debugFramebufferData.length);
-      }
-   }
+			glUseProgram(0);
+		} finally {
+			glUseProgram(0);
 
-   @Override
-   public void close() throws IOException {
-      super.close();
+			glBindVertexArray(0);
+			glBindBuffer(GL_ARRAY_BUFFER, 0);
+			framebuffer.getDestination().unbind();
+			glDisable(GL_BLEND);
 
-      CloseableUtils.close(
-            eFirstShader,
-            eMinShader,
-            eMaxShader,
-            eLastShader,
-            cumulativeHistogramVAO,
-            eFirstFramebuffer,
-            eMinFramebuffer,
-            eMaxFramebuffer,
-            eLastFramebuffer
-            );
-   }
+		}
 
-   @Override
-   public void setMaxAdjustPerFrame(float maxAdjust) {
-      this.maxAdjustPerFrame = maxAdjust;
-   }
-   @Override
-   public void setPhasedDRAAdjustmentEnabled(boolean enabled) {
-      this.phasedDRAAdjustmentEnabled = enabled;
-   }
+	}
 
-   @Override
-   public void reset() {
-      final float maxPixel = getImage().getMaxPixelValue();
-      clearFramebuffer(0.0f, 0.0f, 0.0f, 1.0f, eMaxFramebuffer, eLastFramebuffer);
-      clearFramebuffer(maxPixel, maxPixel, maxPixel, 1.0f, eFirstFramebuffer, eMinFramebuffer);
+	private CumulativeHistogram getCumulativeHistogram() {
+		if (cumulativeHistogram == null) {
+			cumulativeHistogram = this.getImageChain().getPreviousImageOp(this, CumulativeHistogram.class);
+		}
+		return cumulativeHistogram;
+	}
+	private int getHeight() {
+		return getSize().height;
+	}
 
-   }
+	private Histogram getHistogram() {
+		if (histogram == null) {
+			histogram = this.getImageChain().getPreviousImageOp(this, Histogram.class);
+		}
+		return histogram;
+	}
+
+	private Dimension getSize() {
+		return FB_DIMENSION;
+	}
+	private int getWidth() {
+		return getSize().width;
+	}
+
+	private void allocateVAO(Framebuffer framebuffer) {
+		if (cumulativeHistogramVAO == null) {
+			cumulativeHistogramVAO = new VertexArrayObject(pointInstance, new Dimension(1,1), POSITION_ATTRIBUTE);
+		}
+	}
+
+	public void destroy() {
+		glDeleteBuffers(cumulativeHistogramVAO.getVao());
+	}
+
+
+	private void initialize() throws Exception {
+		if (eFirstFramebuffer == null) {
+			histogram = getHistogram();
+			cumulativeHistogram = getCumulativeHistogram();
+
+			final ELTDisplayContext eltDisplayContext = getELTDisplayContext();
+			eFirstFramebuffer = new PingPongFramebuffer(FB_DIMENSION, GLInternalFormat.GlInternalFormatRGB32F, eltDisplayContext);
+			eMinFramebuffer = new PingPongFramebuffer(FB_DIMENSION, GLInternalFormat.GlInternalFormatRGB32F, eltDisplayContext);
+			eMaxFramebuffer = new PingPongFramebuffer(FB_DIMENSION, GLInternalFormat.GlInternalFormatRGB32F, eltDisplayContext);
+			eLastFramebuffer = new PingPongFramebuffer(FB_DIMENSION, GLInternalFormat.GlInternalFormatRGB32F, eltDisplayContext);
+
+			//         Arrays.asList(eFirstFramebuffer, eMinFramebuffer, eMaxFramebuffer, eLastFramebuffer)
+			//         .stream().forEach(fb->setFramebufferUninitialized(fb));
+			allocateVAO(cumulativeHistogram.getResultFramebuffer());
+
+			debugFramebufferData = new float[3];
+			debugFramebufferBuffer = BufferUtils.createFloatBuffer(debugFramebufferData.length);
+		}
+	}
+
+	@Override
+	public void close() throws IOException {
+		super.close();
+
+		CloseableUtils.close(
+				cumulativeHistogramVAO,
+				eFirstFramebuffer,
+				eMinFramebuffer,
+				eMaxFramebuffer,
+				eLastFramebuffer
+				);
+	}
+
+	@Override
+	public void setMaxAdjustPerFrame(float maxAdjust) {
+		this.maxAdjustPerFrame = maxAdjust;
+	}
+	@Override
+	public void setPhasedDRAAdjustmentEnabled(boolean enabled) {
+		this.phasedDRAAdjustmentEnabled = enabled;
+	}
+
+	@Override
+	public void reset() {
+		final float maxPixel = getImage().getMaxPixelValue();
+		clearFramebuffer(0.0f, 0.0f, 0.0f, 1.0f, eMaxFramebuffer, eLastFramebuffer);
+		clearFramebuffer(maxPixel, maxPixel, maxPixel, 1.0f, eFirstFramebuffer, eMinFramebuffer);
+
+	}
 
 }

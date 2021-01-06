@@ -17,6 +17,7 @@
 package com.leidoslabs.holeshot.chipper;
 
 import java.io.IOException;
+import java.util.concurrent.ExecutionException;
 
 import org.eclipse.swt.SWT;
 import org.eclipse.swt.layout.GridData;
@@ -28,103 +29,109 @@ import org.lwjgl.opengl.swt.GLCanvas;
 import org.lwjgl.opengl.swt.GLData;
 
 import com.leidoslabs.holeshot.elt.ELTDisplayContext;
-import com.leidoslabs.holeshot.elt.ELTDisplayExecutor;
 
 /**
  * Graphics context for windows platforms
  */
 class WindowsGraphicsContext extends GraphicsContext {
-   private GLCanvas context;
-   private Shell shell;
-   private Display display;
-   private ELTDisplayExecutor eltDisplayExecutor;
+	private GLCanvas context;
+	private Shell shell;
+	private Display display;
+	private ELTDisplayContext eltDisplayContext;
 
-   /**
-    * Starts context thread, sets up canvas, window, etc.
-    */
-   public WindowsGraphicsContext() {
-      Thread eltThread = new Thread(() -> {
-         display = new Display();
-         shell = new Shell(display, SWT.NO_TRIM);
-         context = new GLCanvas(shell, SWT.DOUBLE_BUFFERED | SWT.NO_BACKGROUND, getGLData());
-         context.setCurrent();
-         GL.createCapabilities();
-         context.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true, 1, 1));
-         context.setLayout(new GridLayout(1, false));
-         shell.open();
-         synchronized (WindowsGraphicsContext.this) {
-            eltDisplayExecutor = new ELTDisplayExecutor(new DisplayContext());
-            WindowsGraphicsContext.this.notify();
-         }
-         while (!display.isDisposed()) {
-            if (!display.readAndDispatch()) {
-               display.sleep();
-            }
-         }
-      });
-      eltThread.start();
+	/**
+	 * Starts context thread, sets up canvas, window, etc.
+	 */
+	public WindowsGraphicsContext() {
+		Thread eltThread = new Thread(() -> {
+			display = new Display();
+			shell = new Shell(display, SWT.NO_TRIM);
+			context = new GLCanvas(shell, SWT.DOUBLE_BUFFERED | SWT.NO_BACKGROUND, getGLData());
+			context.setCurrent();
+			GL.createCapabilities();
+			context.setLayoutData(new GridData(SWT.FILL, SWT.FILL, true, true, 1, 1));
+			context.setLayout(new GridLayout(1, false));
+			shell.open();
+			synchronized (WindowsGraphicsContext.this) {
+				try {
+					eltDisplayContext = new DisplayContext();
+					WindowsGraphicsContext.this.notify();
+				} catch (InterruptedException | ExecutionException e) {
+					e.printStackTrace();
+				}
+			}
+			while (!display.isDisposed()) {
+				if (!display.readAndDispatch()) {
+					display.sleep();
+				}
+			}
+		});
+		eltThread.start();
 
-      synchronized(this) {
-         try {
-            while (eltDisplayExecutor == null) {
-               this.wait();
-            }
-         } catch (InterruptedException e) {
-         }
-      }
-   }
-   @Override
-   public ELTDisplayExecutor getDisplayExecutor() {
-      return eltDisplayExecutor;
-   }
-   private class DisplayContext extends ELTDisplayContext {
-      @Override
-      public void asyncExec(Runnable runnable) {
-         display.asyncExec(runnable);
-      }
-      @Override
-      protected void setOpenGLContextCurrent() {
-      }
-      @Override
-      public void syncExec(Runnable runnable) {
-         display.syncExec(runnable);
-      }
-      @Override
-      public synchronized boolean setContextThread() {
-         return super.setContextThread() || (Thread.currentThread() != display.getThread());
-      }
+		synchronized(this) {
+			try {
+				while (eltDisplayContext == null) {
+					this.wait();
+				}
+			} catch (InterruptedException e) {
+			}
+		}
+	}
+	@Override
+	public ELTDisplayContext getELTDisplayContext() {
+		return eltDisplayContext;
+	}
+	private class DisplayContext extends ELTDisplayContext {
+		public DisplayContext( ) throws InterruptedException, ExecutionException {
+			super(context.handle);
+		}
+		@Override
+		public void asyncExec(Runnable runnable) {
+			display.asyncExec(runnable);
+		}
+		@Override
+		protected void setOpenGLContextCurrent() {
+		}
+		@Override
+		public void syncExec(Runnable runnable) {
+			display.syncExec(runnable);
+		}
+		@Override
+		public synchronized boolean setContextThread() {
+			return super.setContextThread() || (Thread.currentThread() != display.getThread());
+		}
 
-   }
+	}
 
-   private static GLData getGLData() {
-      GLData data = new GLData();
-      data.profile = GLData.Profile.CORE;
-      data.majorVersion = 4;
-      data.minorVersion = 0;
-      data.samples = 0; // 4; 4x multisampling
-      data.swapInterval = null; // for enabling v-sync (swapbuffers sync'ed to monitor refresh)
-      data.doubleBuffer = true;
-      data.depthSize = 32;
+	private static GLData getGLData() {
+		GLData data = new GLData();
+		data.profile = GLData.Profile.CORE;
+		data.majorVersion = 4;
+		data.minorVersion = 0;
+		data.samples = 0; // 4; 4x multisampling
+		data.swapInterval = 0;
+		data.doubleBuffer = true;
+		data.depthSize = 32;
 
-      return data;
-   }
+		return data;
+	}
 
-   @Override
-   public void init() {
-   }
+	@Override
+	public void init() {
+	}
 
-   @Override
-   public void makeCurrent() {
-      context.setCurrent();
-   }
+	@Override
+	public void makeCurrent() {
+		context.setCurrent();
+	}
 
-   @Override
-   public void swapBuffers() {
-      context.swapBuffers();
-   }
-   @Override
-   public void close() throws IOException {
-      shell.close();
-   }
+	@Override
+	public void swapBuffers() {
+		context.swapBuffers();
+	}
+	@Override
+	public void close() throws IOException {
+		shell.close();
+	}
 
 }

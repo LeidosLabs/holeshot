@@ -1,0 +1,17 @@
+diff a/chipper-service/src/main/resources/log4j.properties b/chipper-service/src/main/resources/log4j.properties	(rejected hunks)
+@@ -17,10 +17,12 @@
+ log4j.logger.com.leidoslabs.holeshot.tileserver.v1=ERROR
+ log4j.logger.com.leidoslabs.holeshot=ERROR
+ 
+-log4j.rootLogger=info,rollingFile
+-#log4j.rootLogger=debug,console
++#log4j.rootLogger=info,rollingFile
++log4j.rootLogger=debug,console
+ log4j.logger.org.ehcache=warn
+-#log4j.logger.com.leidoslabs.holeshot.chipper=debug
++log4j.logger.com.leidoslabs.holeshot.chipper=debug
++log4j.logger.com.leidoslabs.holeshot.tileserver.v1=DEBUG
++log4j.logger.com.leidoslabs.holeshot=DEBUG
+ log4j.logger.org.apache=warn
+ log4j.logger.com.amazonaws=warn
+ log4j.logger.org.eclipse.jetty=warn

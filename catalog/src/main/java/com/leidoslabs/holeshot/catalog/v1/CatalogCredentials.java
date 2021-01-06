@@ -23,7 +23,7 @@ import com.leidoslabs.holeshot.credentials.HoleshotCredentials;
 
 public class CatalogCredentials extends HoleshotCredentials {
 
-    private static final String LEIDOS_CATALOG_KEY = "leidos_sdk_catalog_key";
+    private static final String HOLESHOT_CATALOG_KEY = "holeshot_catalog_key";
     private static CatalogCredentials applicationDefaults = null;
 
     private static Properties getApplicationDefaultProperties() {
@@ -45,6 +45,6 @@ public class CatalogCredentials extends HoleshotCredentials {
     }
 
     public String getCatalogKey() {
-        return getProperties().getProperty(LEIDOS_CATALOG_KEY);
+        return getProperties().getProperty(HOLESHOT_CATALOG_KEY);
     }
 }

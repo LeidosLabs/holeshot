@@ -16,58 +16,41 @@
 
 package com.leidoslabs.holeshot.elt.coord;
 
-import java.awt.geom.Point2D;
-
-import org.joml.Vector2d;
-import org.joml.Vector3d;
+import org.joml.Vector2ic;
+import org.joml.Vector3dc;
 import org.locationtech.jts.geom.Coordinate;
 
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
 import com.leidoslabs.holeshot.imaging.coord.GeodeticCoordinate;
-import com.leidoslabs.holeshot.imaging.coord.ImageCoordinate;
-import com.leidoslabs.holeshot.imaging.coord.ImageScale;
 
 /**
  * Representation of Geodetic Coordinate with ELTCoordinate functionality
  */
 public class GeodeticELTCoordinate extends ELTCoordinate<Coordinate> {
+	public GeodeticELTCoordinate(ImageWorld windowViewport, GeodeticCoordinate geodeticCoordinate) {
+		this(windowViewport, geodeticCoordinate.getSourceCoordinate());
+	}
+	public GeodeticELTCoordinate(ImageWorld windowViewport, Coordinate coordinate) {
+		super(windowViewport, coordinate);
+	}
 
-   private final GeodeticCoordinate geodeticCoordinate;
+	@Override
+	public Coordinate getGeodeticCoordinate() {
+		return getSourceCoordinate();
+	}
 
-  public GeodeticELTCoordinate(ImageWorld world, GeodeticCoordinate geodeticCoordinate) {
-    super(world, geodeticCoordinate.getSourceCoordinate(), geodeticCoordinate.getImageScale());
-    this.geodeticCoordinate = geodeticCoordinate;
-  }
-  public GeodeticELTCoordinate(ImageWorld imageWorld, Coordinate coordinate, ImageScale scale) {
-     this(imageWorld, new GeodeticCoordinate(imageWorld.getTopTile().getImage().getCameraModel(), coordinate, scale));
-  }
+	@Override
+	public Vector3dc getOpenGLCoordinate() {
+		return getImageWorld().geodeticToClip(getSourceCoordinate());
+	}
 
-  @Override
-  public Coordinate getGeodeticCoordinate() {
-      return geodeticCoordinate.getSourceCoordinate();
-  }
+	@Override
+	public Vector2ic getScreenCoordinate() {
+		return getImageWorld().geodeticToScreen(getSourceCoordinate());
+	}
 
-  @Override
-  public Vector3d getOpenGLCoordinate() {
-    return getELTImageCoordinate().getOpenGLCoordinate();
-  }
-
-
-  @Override
-  public Point2D getR0ImageCoordinate() {
-     return geodeticCoordinate.getR0ImageCoordinate();
-  }
-
-  @Override
-  public Vector2d getScreenCoordinate() {
-     return getELTImageCoordinate().getScreenCoordinate();
-  }
-
-  private ImageCoordinate getImageCoordinate() {
-     return new ImageCoordinate(getCameraModel(), getR0ImageCoordinate(), ImageScale.forRset(0));
-  }
-  private ImageELTCoordinate getELTImageCoordinate() {
-     return new ImageELTCoordinate(getImageWorld(), getImageCoordinate());
-
-  }
-
+	@Override
+	public Coordinate getProjectedCoordinate() {
+		return getImageWorld().geodeticToProjected(getSourceCoordinate());
+	}
 }

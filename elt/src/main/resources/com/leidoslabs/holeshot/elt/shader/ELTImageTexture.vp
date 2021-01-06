@@ -1,9 +1,8 @@
 #version 400 core
 
-layout(location = 0) in vec2 vertexPosition;
+layout(location = 0) in vec3 vertexPosition;
 layout(location = 1) in vec2 texturePosition;
-uniform mat4 pMat;
-uniform mat4 mvMat;
+uniform mat4 mvpMat;
 
 out VertexData {
    vec2 texturePosition;
@@ -11,5 +10,5 @@ out VertexData {
 
 void main() {
     vs_out.texturePosition = texturePosition;
-    gl_Position = pMat * mvMat * vec4(vertexPosition.xy, 0.0, 1.0);
+    gl_Position = mvpMat * vec4(vertexPosition, 1.0);
 }

@@ -53,36 +53,27 @@ import org.slf4j.LoggerFactory;
 public class ShaderProgram implements Closeable {
    private static final Logger LOGGER = LoggerFactory.getLogger(ShaderProgram.class);
 
-   private final int programId;
-   private final int vertexShader;
-   private final int fragmentShader;
+   private int programId;
+   private int vertexShader;
+   private int fragmentShader;
+   private Class<?> clazz;
+   private final String vertexShaderName;
+   private final String fragmentShaderName;
+   private boolean initialized;
 
    /**
     * Compile and attach vertex/fragment shaders and link as into a program identifiable
     * by programId
     * @param clazz Shader class (e.g HistogramType, ShapeType)
-    * @param vertexShader
-    * @param fragmentShader
+    * @param vertexShaderName
+    * @param fragmentShaderName
     * @throws IOException
     */
-   public ShaderProgram(Class<?> clazz, String vertexShader, String fragmentShader) throws IOException {
-      programId = glCreateProgram();
-
-      this.vertexShader = glCreateShader(GL_VERTEX_SHADER);
-      glShaderSource(this.vertexShader, readShaderCode(clazz, vertexShader));
-      glCompileShader(this.vertexShader);
-      checkCompileStatus(this.vertexShader, vertexShader);
-
-      glAttachShader(this.programId, this.vertexShader);
-
-      this.fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
-      glShaderSource(this.fragmentShader, readShaderCode(clazz, fragmentShader));
-      glCompileShader(this.fragmentShader);
-      checkCompileStatus(this.fragmentShader, fragmentShader);
-      glAttachShader(this.programId, this.fragmentShader);
-
-      glLinkProgram(this.programId);
-      checkLinkStatus(vertexShader, fragmentShader);
+   public ShaderProgram(Class<?> clazz, String vertexShaderName, String fragmentShaderName) throws IOException {
+	   this.clazz = clazz;
+	   this.vertexShaderName = vertexShaderName;
+	   this.fragmentShaderName = fragmentShaderName;
+	   this.initialized = false;
    }
 
    private void checkCompileStatus(int shader, String shaderSource) {
@@ -102,10 +93,34 @@ public class ShaderProgram implements Closeable {
       }
    }
 
+   private synchronized void initialize() throws IOException {
+	   if (!initialized) {
+		   initialized = true;
+		   programId = glCreateProgram();
+
+		   this.vertexShader = glCreateShader(GL_VERTEX_SHADER);
+		   glShaderSource(this.vertexShader, readShaderCode(clazz, vertexShaderName));
+		   glCompileShader(this.vertexShader);
+		   checkCompileStatus(this.vertexShader, vertexShaderName);
+
+		   glAttachShader(this.programId, this.vertexShader);
+
+		   this.fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+		   glShaderSource(this.fragmentShader, readShaderCode(clazz, fragmentShaderName));
+		   glCompileShader(this.fragmentShader);
+		   checkCompileStatus(this.fragmentShader, fragmentShaderName);
+		   glAttachShader(this.programId, this.fragmentShader);
+
+		   glLinkProgram(this.programId);
+		   checkLinkStatus(vertexShaderName, fragmentShaderName);
+	   }
+   }
    /**
     * Use Shader program
+ * @throws IOException 
     */
-   public void useProgram() {
+   public void useProgram() throws IOException {
+	  initialize();
       glUseProgram(programId);
    }
 

@@ -58,8 +58,53 @@ Image Tileserver with multi-tiered caching.
 - OpenJDK 8
 - Ant
 - Maven
+- Python
+- Chalice (`pip install chalice`)
 
 Build:
+- `mvn clean install`
 
-- mvn clean install
+#### CloudFormation / Local dev
 
+ - Make sure to generate the most updated version of your code by running:
+
+	```
+	mvn clean install
+	mvn -Dmaven.test.skip=true -DskipTests deploy --non-recursive
+	```
+	
+	Note: You may see an error saying that the created artifacts could not be uploaded to nexus.  This is fine, your dev artifacts don't need to go up to nexus.
+	
+ - Run the cloudFormMain.sh with parameters specifically for your instances.
+
+Examples:
+- Run the "dev" stack create:
+  - From the holeshot directory run
+  ```	 
+  cloudFormMain.sh
+  ```
+- Run a dev stack by passing in a stack suffix:
+	- From the holeshot directory run:
+  ```
+  cloudFormMain.sh mystack
+  ```
+	 
+
+The main CloudFormation script (cloudFormMain.sh) takes in 2 arguments from the command line:
+
+- StackSuffix - a string that will be appended to all resources created in AWS.  There are some limitations with the length of the string and what is passed in should be all lower-case.
+- PrimaryStack - a boolean value (1 or 0) indicating if the resources that are being created will be the ones that will be used to replace the current resources. (TODO get a better explanation).
+
+##### Post-deploy steps
+###### Catalog Service
+Check the ReadMe of the catalog service at catalog/README.md
+
+***Note:*** There also may be additional configurations for each service that can be adjusted as needed.  Currently this is the list of configurations for each service:
+
+##### Chipper Service
+- holeshot/chipper-service/src/main/cloudformation/chipserver.config.cfg
+  - MAX_CHIPPERS - the maximum number of chippers
+		 
+##### Ingest Service
+- holeshot/ingest-service/src/main/resources/ingestserver.config.cfg
+	- J2PK - A flag indicating jp2k support for ingest service. 0 -> off

@@ -1,3 +1,19 @@
+/*
+ * Licensed to Leidos, Inc. under one or more contributor license agreements.
+ * See the NOTICE file distributed with this work for additional information regarding copyright ownership.
+ * Leidos, Inc. licenses this file to You under the Apache License, Version 2.0
+ * (the "License"); you may not use this file except in compliance with
+ * the License.  You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
 package com.leidoslabs.holeshot.imaging.nitf;
 
 import java.awt.Rectangle;
@@ -11,6 +27,7 @@ import java.awt.image.WritableRaster;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
+import java.util.Iterator;
 import java.util.stream.IntStream;
 
 import javax.imageio.ImageIO;
@@ -30,7 +47,7 @@ public class NITFJP2KCompressedTileReader extends NITFTileReader {
 
 	public NITFJP2KCompressedTileReader(final ImageSegment imageSegment) throws IOException {
 		super(imageSegment);
-		ImageReader reader = ImageIO.getImageReadersByMIMEType("image/jp2").next();
+		ImageReader reader = getJ2KReader();
 		ImageInputStream imageInputStream = getImageSegment().getData();
 		imageInputStream.seek(0);
 		skipToMarker(imageInputStream, START_OF_IMAGE);
@@ -38,7 +55,6 @@ public class NITFJP2KCompressedTileReader extends NITFTileReader {
 		this.image = reader.read(0);
 		reader.dispose();
 	}
-
 
 	@Override
 	protected Raster readRaster(int tileX, int tileY) throws IOException {
@@ -69,5 +85,18 @@ public class NITFJP2KCompressedTileReader extends NITFTileReader {
 		if (a == markerByte) {
 			imageInputStream.skipBytes(i - 1);
 		}
+	}
+	
+	private ImageReader getJ2KReader() throws IOException {
+		Iterator<ImageReader> irs = ImageIO.getImageReadersByMIMEType("image/jp2");
+		if (irs == null || !irs.hasNext()) {
+				throw new UnsupportedOperationException("NitfRenderer.render(): no ImageReader found for media type 'JPEG2000'.");
+		}
+		while (irs.hasNext()) {
+			ImageReader ir = irs.next();
+			if (ir.getClass().toString().contains("JP2KKakaduImageReader"))
+				return ir;
+		}
+		throw new UnsupportedOperationException("imageio-ext JP2KKakaduImageReader not found. Is imageio-ext-kakadujp2 in classpath?");
 	}
 }
