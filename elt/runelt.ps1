@@ -3,7 +3,7 @@
 $MVN_REPO_HOME="F:\dev\.m2\repository"
 
 
-$LEIDOS_IMAGING_HOME=(Split-Path -Path "$PSScriptRoot" -Parent)
+$HOLESHOT_IMAGING_HOME=(Split-Path -Path "$PSScriptRoot" -Parent)
 
 
 $CLASSPATH="$env:JAVA_HOME\jre\lib\resources.jar" +
@@ -24,7 +24,7 @@ $CLASSPATH="$env:JAVA_HOME\jre\lib\resources.jar" +
 ";$env:JAVA_HOME\jre\lib\ext\sunmscapi.jar" +
 ";$env:JAVA_HOME\jre\lib\ext\sunpkcs11.jar" +
 ";$env:JAVA_HOME\jre\lib\ext\zipfs.jar" +
-";$LEIDOS_IMAGING_HOME\elt\target\elt-0.0.1-SNAPSHOT.jar" +
+";$HOLESHOT_IMAGING_HOME\elt\target\elt-0.2.jar" +
 ";$MVN_REPO_HOME\org\slf4j\slf4j-log4j12\1.8.0-beta0\slf4j-log4j12-1.8.0-beta0.jar" +
 ";$MVN_REPO_HOME\org\slf4j\slf4j-api\1.8.0-beta0\slf4j-api-1.8.0-beta0.jar" +
 ";$MVN_REPO_HOME\log4j\log4j\1.2.17\log4j-1.2.17.jar" +
@@ -46,14 +46,14 @@ $CLASSPATH="$env:JAVA_HOME\jre\lib\resources.jar" +
 ";$MVN_REPO_HOME\com\google\errorprone\error_prone_annotations\2.2.0\error_prone_annotations-2.2.0.jar" +
 ";$MVN_REPO_HOME\com\google\j2objc\j2objc-annotations\1.1\j2objc-annotations-1.1.jar" +
 ";$MVN_REPO_HOME\org\codehaus\mojo\animal-sniffer-annotations\1.17\animal-sniffer-annotations-1.17.jar" +
-";$LEIDOS_IMAGING_HOME\tile-service-sdk\target\tile-service-sdk-0.0.1-SNAPSHOT.jar" +
-";$LEIDOS_IMAGING_HOME\edh2-security-core\target\edh2-security-core-0.0.1-SNAPSHOT.jar" +
+";$HOLESHOT_IMAGING_HOME\tile-service-sdk\target\tile-service-sdk-0.2.jar" +
+";$HOLESHOT_IMAGING_HOME\edh2-security-core\target\edh2-security-core-0.2.jar" +
 ";$MVN_REPO_HOME\javax\inject\javax.inject\1\javax.inject-1.jar" +
-";$LEIDOS_IMAGING_HOME\common\target\common-0.0.1-SNAPSHOT.jar" +
+";$HOLESHOT_IMAGING_HOME\common\target\common-0.2.jar" +
 ";$MVN_REPO_HOME\com\scaleset\scaleset-geo\0.17.0\scaleset-geo-0.17.0.jar" +
 ";$MVN_REPO_HOME\com\spatial4j\spatial4j\0.4\spatial4j-0.4.jar" +
-";$LEIDOS_IMAGING_HOME\photogrammetry\target\classes" +
-";$LEIDOS_IMAGING_HOME\photogrammetry\target\photogrammetry-0.0.1-SNAPSHOT.jar" +
+";$HOLESHOT_IMAGING_HOME\photogrammetry\target\classes" +
+";$HOLESHOT_IMAGING_HOME\photogrammetry\target\photogrammetry-0.2.jar" +
 ";$MVN_REPO_HOME\org\apache\commons\commons-math3\3.6.1\commons-math3-3.6.1.jar" +
 ";$MVN_REPO_HOME\com\vividsolutions\jts\1.13\jts-1.13.jar" +
 ";$MVN_REPO_HOME\commons-io\commons-io\2.6\commons-io-2.6.jar" +
@@ -227,7 +227,7 @@ Set-PSDebug -Trace 1
 & $env:JAVA_HOME\bin\java `
      "-cp" "$CLASSPATH" `
      "-Xmx2g" `
-     "-Djava.library.path=$LEIDOS_IMAGING_HOME\elt\target\natives" `
+     "-Djava.library.path=$HOLESHOT_IMAGING_HOME\elt\target\natives" `
      "-Djava.util.concurrent.ForkJoinPool.common.parallelism=10" `
      "-Dsun.awt.noerasebackground=true" `
      "-Dsun.java2d.noddraw=true" `

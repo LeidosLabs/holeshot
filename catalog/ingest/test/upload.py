@@ -3,7 +3,7 @@ import json
 import boto3
 import time
 
-sns_arn = 'arn:aws:sns:us-east-1:199974664221:advanced-analytics-image-metadata'
+sns_arn = 'arn:aws:sns:us-east-1:555555555555:advanced-analytics-image-metadata'
 
 client = boto3.client('sns')
 

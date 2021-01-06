@@ -59,127 +59,125 @@ import com.leidoslabs.holeshot.elt.gpuimage.Texture;
  * Representation of an OpenGL frame buffer. Manipulated by image chain operations 
  */
 public class Framebuffer implements Closeable {
-   public int getFboId() {
-      return fboId;
-   }
+	public int getFboId() {
+		return fboId;
+	}
 
-   public Texture getTexture() {
-      return texture;
-   }
-   private final int fboId;
-   private final Texture texture;
-   private final int depthRenderBufferID;
+	public Texture getTexture() {
+		return texture;
+	}
+	private final int fboId;
+	private final Texture texture;
+	private final int depthRenderBufferID;
 
-   /**
-    * Binds frame, attaches texture, then unbinds
-    * @param size
-    * @param internalFormat
-    * @param eltDisplayContext
-    * @throws IOException
-    */
-   public Framebuffer(Dimension size, GLInternalFormat internalFormat, ELTDisplayContext eltDisplayContext) throws IOException {
-      this(size, internalFormat, eltDisplayContext, GL_NEAREST, GL_CLAMP_TO_EDGE);
-   }
+	/**
+	 * Binds frame, attaches texture, then unbinds
+	 * @param size
+	 * @param internalFormat
+	 * @param eltDisplayContext
+	 * @throws IOException
+	 */
+	public Framebuffer(Dimension size, GLInternalFormat internalFormat, ELTDisplayContext eltDisplayContext) throws Exception {
+		this(size, internalFormat, eltDisplayContext, GL_NEAREST, GL_CLAMP_TO_EDGE);
+	}
 
-   /**
-    * Binds frame, attaches texture, then unbinds
-    * @param size
-    * @param internalFormat
-    * @param eltDisplayContext
-    * @param filter
-    * @param wrap
-    * @throws IOException
-    */
-   public Framebuffer(Dimension size, GLInternalFormat internalFormat, ELTDisplayContext eltDisplayContext, int filter, int wrap) throws IOException {
-      fboId = glGenFramebuffers();
-      this.texture = new Texture(size, internalFormat, filter, wrap, eltDisplayContext);
-      bind();
-      attachTexture();
+	/**
+	 * Binds frame, attaches texture, then unbinds
+	 * @param size
+	 * @param internalFormat
+	 * @param eltDisplayContext
+	 * @param filter
+	 * @param wrap
+	 * @throws IOException
+	 */
+	public Framebuffer(Dimension size, GLInternalFormat internalFormat, ELTDisplayContext eltDisplayContext, int filter, int wrap) throws Exception {
+		fboId = glGenFramebuffers();
+		this.texture = new Texture(size, internalFormat, filter, wrap, eltDisplayContext);
+		bind();
+		attachTexture();
 
-      depthRenderBufferID = glGenRenderbuffers();
+		depthRenderBufferID = glGenRenderbuffers();
 
-      resetDepthBuffer();
+		resetDepthBuffer();
 
-      unbind();
-   }
+		unbind();
+	}
 
-   private void attachTexture() {
-      glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-            GL11.GL_TEXTURE_2D, texture.getId(), 0);
-   }
+	private void attachTexture() {
+		glFramebufferTexture2D( GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
+				GL11.GL_TEXTURE_2D, texture.getId(), 0);
+	}
 
-   public void bind() {
-      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboId); // this fb, msaa or normal
-      glBindFramebuffer(GL_READ_FRAMEBUFFER, fboId);  // msaa: sampling sink, normal: this fb
+	public void bind() {
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, fboId); // this fb, msaa or normal
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, fboId);  // msaa: sampling sink, normal: this fb
 
-   }
+	}
 
-   public void unbind() {
-      glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // this fb, msaa or normal
-      glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);  // msaa: sampling sink, normal: this fb
-   }
+	public void unbind() {
+		glBindFramebuffer(GL_DRAW_FRAMEBUFFER, 0); // this fb, msaa or normal
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, 0);  // msaa: sampling sink, normal: this fb
+	}
 
-   public Rectangle getRectangle() {
-      return new Rectangle(0,0,getSize().width, getSize().height);
-   }
-   public Dimension getSize() {
-      return texture.getSize();
-   }
+	public Rectangle getRectangle() {
+		return new Rectangle(0,0,getSize().width, getSize().height);
+	}
+	public Dimension getSize() {
+		return texture.getSize();
+	}
 
-   public void clearBuffer() {
-      clearBuffer(0.0f, 0.0f, 0.0f, 1.0f);
-   }
-   public void clearBuffer(float clearRed, float clearGreen, float clearBlue, float clearAlpha) {
-      try {
-         bind();
-         //glEnable(GL_ALPHA_TEST);
-         //glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
-//         glClearBufferfv(GL_COLOR, 0, new float[] { clearRed, clearGreen, clearBlue, clearAlpha });
-         glClearBufferfv(GL_COLOR, 0, new float[] { 0.0f, 0.0f, 0.0f, 0.0f });
-      } finally {
-         unbind();
-      }
-   }
+	public void clearBuffer() {
+		clearBuffer(0.0f, 0.0f, 0.0f, 0.0f);
+	}
+	public void clearBuffer(float clearRed, float clearGreen, float clearBlue, float clearAlpha) {
+		try {
+			bind();
+			glClearBufferfv(GL_COLOR, 0, new float[] { clearRed, clearGreen, clearBlue, clearAlpha });
+		} finally {
+			unbind();
+		}
+	}
 
 
-   public void reset(Dimension size) {
-      this.reset(size, texture.getInternalFormat());
-   }
+	public void reset(Dimension size) {
+		this.reset(size, texture.getInternalFormat());
+	}
 
-   public void reset(Dimension size, GLInternalFormat internalFormat) {
-      if (!size.equals(getSize()) || texture.getInternalFormat() != internalFormat) {
-         texture.reset(size, internalFormat);
-         resetDepthBuffer();
-      }
-   }
-   private void resetDepthBuffer() {
-      glBindRenderbuffer(GL_RENDERBUFFER, depthRenderBufferID);                // bind the depth renderbuffer
-      glRenderbufferStorage(GL_RENDERBUFFER, GL14.GL_DEPTH_COMPONENT24, getSize().width, getSize().height); // get the data space for it
-      glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_RENDERBUFFER, depthRenderBufferID); // bind it to the renderbuffer
-   }
+	public void reset(Dimension size, GLInternalFormat internalFormat) {
+		if (!size.equals(getSize()) || texture.getInternalFormat() != internalFormat) {
+			texture.reset(size, internalFormat);
+			resetDepthBuffer();
+		}
+	}
+	private void resetDepthBuffer() {
+		glBindRenderbuffer(GL_RENDERBUFFER, depthRenderBufferID);                // bind the depth renderbuffer
+		glRenderbufferStorage(GL_RENDERBUFFER, GL_DEPTH24_STENCIL8, getSize().width, getSize().height); // get the data space for it
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_DEPTH_ATTACHMENT,GL_RENDERBUFFER, depthRenderBufferID); // bind it to the renderbuffer
+		glFramebufferRenderbuffer(GL_FRAMEBUFFER,GL_STENCIL_ATTACHMENT,GL_RENDERBUFFER, depthRenderBufferID); // bind it to the renderbuffer
+	}
 
-   /**
-    * Read frame into outputArray
-    * @param outputBuffer
-    * @param outputArray array to be written to
-    */
-   public void readFramebuffer(FloatBuffer outputBuffer, float[] outputArray) {
-      final Dimension size = getSize();
-      final int fbWidth = size.width;
-      final int fbHeight = size.height;
+	/**
+	 * Read frame into outputArray
+	 * @param outputBuffer
+	 * @param outputArray array to be written to
+	 */
+	public void readFramebuffer(FloatBuffer outputBuffer, float[] outputArray) {
+		final Dimension size = getSize();
+		final int fbWidth = size.width;
+		final int fbHeight = size.height;
 
-      glBindFramebuffer(GL_READ_FRAMEBUFFER, getFboId());
-      glViewport(0, 0, fbWidth, fbHeight);
+		glBindFramebuffer(GL_READ_FRAMEBUFFER, getFboId());
+		glViewport(0, 0, fbWidth, fbHeight);
 
-      outputBuffer.rewind();
-      glReadPixels(0, 0, fbWidth, fbHeight, GL_RGB, GL_FLOAT, outputBuffer);
-      outputBuffer.get(outputArray);
-   }
+		outputBuffer.rewind();
+		glReadPixels(0, 0, fbWidth, fbHeight, GL_RGB, GL_FLOAT, outputBuffer);
+		outputBuffer.get(outputArray);
+	}
 
-   @Override
-   public void close() throws IOException {
-      CloseableUtils.close(texture);
-      glDeleteFramebuffers(fboId);
-      glDeleteRenderbuffers(depthRenderBufferID);
-   }
+	@Override
+	public void close() throws IOException {
+		CloseableUtils.close(texture);
+		glDeleteFramebuffers(fboId);
+		glDeleteRenderbuffers(depthRenderBufferID);
+	}
 }

@@ -19,7 +19,7 @@ package com.leidoslabs.holeshot.elt.imageop;
 /**
  * Interface for Histogram ImageOps
  */
-public interface Histogram extends ImageOp {
+public interface Histogram extends ImageOpPrimitive {
   public int getMaxTextureSize();
   public int getBuckets();
   public int getNumRows();

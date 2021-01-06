@@ -44,17 +44,16 @@ public enum HistogramType {
   public static class Shaders {
     // Names of the shader files, without extensions
     public static final String PASSTHROUGH_VERTEX_SHADER = "PassthroughVertexShader.vp";
+    public static final String PASSTHROUGH_ZORDER_VERTEX_SHADER = "PassthroughZOrderVertexShader.vp";
     public static final String ALL_FOR_ONE_SHADER = "AllForOneShader.vp";
     public static final String EFIRST_SHADER = "eFirstShader.fp";
     public static final String EMIN_SHADER = "eMinShader.fp";
     public static final String EMAX_SHADER = "eMaxShader.fp";
     public static final String ELAST_SHADER = "eLastShader.fp";
-//    public static final String PASSTHROUGH_GEOMETRY_SHADER = "PassthroughGeometryShader.gp";
-//    public static final String CUMULATIVE_GEOMETRY_SHADER = "HistogramCumulativeShader.gp";
+    public static final String CONSTANT_SHADER = "ConstantShader.fp";
     public static final String RED_SAMPLING_SHADER = "HistogramRedSampling.vp";
     public static final String GREEN_SAMPLING_SHADER = "HistogramGreenSampling.vp";
     public static final String BLUE_SAMPLING_SHADER = "HistogramBlueSampling.vp";
-//    public static final String LUMINANCE_SAMPLING_SHADER = "HistogramLuminanceSampling";
     public static final String HISTOGRAM_ACCUMULATION_SHADER = "HistogramAccumulation_GL.fp";
     public static final String CUMULATIVE_HISTOGRAM_SHADER = "CumulativeHistogramShader.fp";
     public static final String SUMMED_AREA_HORIZONTAL_PHASE_SHADER = "SummedAreaHorizontalPhase.fp";
@@ -62,5 +61,9 @@ public enum HistogramType {
     public static final String EQUALIZATION_SHADER = "EqualizationShader.fp";
     public static final String DRA_PARAMETERS_SHADER = "DRAParametersShader.fp";
     public static final String TTC_SHADER = "ToneTransferCurveShader.fp";
+    public static final String MOSAIC_FRAGMENT_SHADER = "MosaicShader.fp";
+    public static final String MOSAIC_VERTEX_SHADER = "MosaicShader.vp";
+	public static final String INTERPOLATED_FRAGMENT_SHADER = "InterpolatedShader.fp";
+	public static final String INTERPOLATED_VERTEX_SHADER = "InterpolatedShader.vp";
   }
 };

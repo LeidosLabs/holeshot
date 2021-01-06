@@ -72,17 +72,18 @@ public class TileServer implements Daemon {
    private static final int SESSION_MAX_INACTIVE_INTERVAL_IN_SECS = 1800;  // 30 mins
    private static final String SERVER_CONTEXT_PATH = "/tileserver/*";
 
-   private static final String TILE_SERVER_URL = "https://tileserver.leidoslabs.com";
+   // TODO This is used to generate the WMTS xml pages and for MRF, it should be read from a config, not hardcoded
+   private static final String TILE_SERVER_URL = "https://tileserver-dev.leidoslabs.com";
 
    private static final int THREAD_POOL_SIZE = 500;
    private int acceptors;
 
    private Server server;
 
-   public TileServer() throws IllegalArgumentException, Exception {
+   public TileServer() {
    }
 
-   public static void main(String[] args) throws Exception {
+   public static void main(String[] args) {
       DaemonLoader.load(TileServer.class.getCanonicalName(), args);
       DaemonLoader.start();
    }
@@ -107,7 +108,7 @@ public class TileServer implements Daemon {
     * Configure jetty server, client, s3 handler, Servlet, etc from Daemon args.
     */
    @Override
-   public void init(DaemonContext daemonContext) throws ParseException, IOException, InvalidParameterException {
+   public void init(DaemonContext daemonContext) throws ParseException, InvalidParameterException {
       LOGGER.entry();
 
       if (server != null) {
@@ -214,7 +215,7 @@ public class TileServer implements Daemon {
    }
 
    @Override
-   public void stop() throws Exception {
+   public void stop() {
       try {
          if (server != null) {
             if (!(server.isStopping() || server.isStopped())) {

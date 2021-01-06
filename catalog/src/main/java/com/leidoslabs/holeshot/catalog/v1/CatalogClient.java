@@ -19,13 +19,27 @@ package com.leidoslabs.holeshot.catalog.v1;
 import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
+import java.util.stream.Collectors;
 
+import org.apache.http.HttpEntity;
+import org.apache.http.client.methods.CloseableHttpResponse;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.utils.URIBuilder;
+import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClients;
+import org.apache.http.util.EntityUtils;
+import org.locationtech.jts.geom.Geometry;
+import org.locationtech.jts.io.WKTWriter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.jayway.jsonpath.Configuration;
 import com.jayway.jsonpath.JsonPath;
 import com.jayway.jsonpath.TypeRef;
@@ -73,6 +87,50 @@ public class CatalogClient {
         }
 
         return result;
+    }
+    
+    /**
+     * Returns all images in the catalog that intersect a given geometry
+     * @return A list of CatalogEntry
+     * @throws IOException
+     */
+    public List<CatalogEntry> getCatalogEntries(Geometry geo) throws IOException {
+        
+        try {
+        	ObjectMapper mapper = new ObjectMapper();
+        	WKTWriter writer = new WKTWriter();
+        	String wkt = writer.write(geo);
+            URIBuilder ub = new URIBuilder(getCatalogURL() + "/search");
+            ub.addParameter("wkt", wkt);
+            HttpGet request = new HttpGet(ub.toString());
+            request.addHeader(CATALOG_API_KEYNAME, credentials.getSecretAccessKey());
+            
+
+            try (CloseableHttpClient client = HttpClients.createDefault();
+                 CloseableHttpResponse response = client.execute(request)) {
+            	
+                HttpEntity entity = response.getEntity();
+                if (entity != null) {
+                    try {
+                    	return mapper.readValue(EntityUtils.toString(entity), new TypeReference<ArrayList<CatalogEntry>>(){});
+                    } catch (IOException e) {
+                    	LOGGER.error("Error deserializing catalog");
+                        e.printStackTrace();
+                        throw e;
+                    }
+                }
+            } catch (IOException e) {
+                LOGGER.error("Error getting catalog");
+                e.printStackTrace();
+                throw e;
+            }
+
+        } catch (URISyntaxException e) {
+            LOGGER.error("error building catalog url");
+            e.printStackTrace();
+            throw new IOException(e);
+        }
+        return null;
     }
 
     /**

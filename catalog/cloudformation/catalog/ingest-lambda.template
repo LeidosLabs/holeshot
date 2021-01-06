@@ -1,6 +1,6 @@
 {
-    "Parameters" : {
-        "NameSuffix": {
+    "Parameters": {
+        "StackSuffix": {
             "Type": "String"
         },
         "SecurityGroups": {
@@ -9,24 +9,12 @@
         "Subnet": {
             "Type": "CommaDelimitedList"
         },
-        "ImageMetadataSNSTopic" : {
-            "Description": "The SNS Topic to subscribe to image metadata from",
-            "Type" : "String"
-        },
-        "ElasticsearchEndpoint" : {
+        "ElasticsearchEndpoint": {
             "Description": "The Elasticsearch to insert documents into",
-            "Type" : "String"
-        },
-        "TileserverURL" : {
-            "Description" : "The tileserver url for generating thumbnail links",
-            "Type" : "String"
+            "Type": "String"
         },
         "S3DeploymentBucket": {
             "Description": "The bucket that contains deployment artifacts",
-            "Type": "String"
-        },
-        "S3BackupBucket": {
-            "Description": "The bucket to store metadata events in for backup",
             "Type": "String"
         }
     },
@@ -34,7 +22,9 @@
         "IngestRole": {
             "Type": "AWS::IAM::Role",
             "Properties": {
-                "RoleName": { "Fn::Sub": "MetadataIngestRole-${NameSuffix}" },
+                "RoleName": {
+                    "Fn::Sub": "AADev-MetadataIngestRole-${StackSuffix}"
+                },
                 "AssumeRolePolicyDocument": {
                     "Version": "2012-10-17",
                     "Statement": [
@@ -48,67 +38,95 @@
                     ]
                 },
                 "Path": "/",
-                "Policies": [{
-                    "PolicyName": { "Fn::Sub": "SNSLambdaPolicy-${NameSuffix}" },
-                    "PolicyDocument": {
-                        "Version": "2012-10-17",
-                        "Statement": [
-                            {
-                                "Effect": "Allow",
-                                "Action": [
-                                    "ec2:DetachNetworkInterface",
-                                    "ec2:DeleteNetworkInterface",
-                                    "sns:ListTopics",
-                                    "sns:GetPlatformApplicationAttributes",
-                                    "sns:Unsubscribe",
-                                    "sns:GetSubscriptionAttributes",
-                                    "sns:ListSubscriptions",
-                                    "sns:CheckIfPhoneNumberIsOptedOut",
-                                    "ec2:CreateNetworkInterface",
-                                    "sns:ListEndpointsByPlatformApplication",
-                                    "sns:ListPhoneNumbersOptedOut",
-                                    "sns:GetEndpointAttributes",
-                                    "sns:SetSubscriptionAttributes",
-                                    "ec2:DescribeNetworkInterfaces",
-                                    "sns:GetSMSAttributes",
-                                    "sns:ListPlatformApplications",
-                                    "sns:ListSubscriptionsByTopic",
-                                    "sns:GetTopicAttributes",
-                                    "sns:Subscribe",
-                                    "sns:ConfirmSubscription",
-                                    "logs:*",
-                                    "s3:PutObject"
-                                ],
-                                "Resource": "*"
-                            }
-                        ]
+                "Policies": [
+                    {
+                        "PolicyName": {
+                            "Fn::Sub": "SNSLambdaPolicy-${StackSuffix}"
+                        },
+                        "PolicyDocument": {
+                            "Version": "2012-10-17",
+                            "Statement": [
+                                {
+                                    "Effect": "Allow",
+                                    "Action": [
+                                        "ec2:DetachNetworkInterface",
+                                        "ec2:DeleteNetworkInterface",
+                                        "sns:ListTopics",
+                                        "sns:GetPlatformApplicationAttributes",
+                                        "sns:Unsubscribe",
+                                        "sns:GetSubscriptionAttributes",
+                                        "sns:ListSubscriptions",
+                                        "sns:CheckIfPhoneNumberIsOptedOut",
+                                        "ec2:CreateNetworkInterface",
+                                        "sns:ListEndpointsByPlatformApplication",
+                                        "sns:ListPhoneNumbersOptedOut",
+                                        "sns:GetEndpointAttributes",
+                                        "sns:SetSubscriptionAttributes",
+                                        "ec2:DescribeNetworkInterfaces",
+                                        "sns:GetSMSAttributes",
+                                        "sns:ListPlatformApplications",
+                                        "sns:ListSubscriptionsByTopic",
+                                        "sns:GetTopicAttributes",
+                                        "sns:Subscribe",
+                                        "sns:ConfirmSubscription",
+                                        "logs:*",
+                                        "s3:PutObject"
+                                    ],
+                                    "Resource": "*"
+                                }
+                            ]
+                        }
                     }
-                }]
+                ],
+                "PermissionsBoundary": "arn:aws:iam::555555555555:policy/DeveloperPolicy"
             }
         },
         "IngestImageMetadata": {
             "Type": "AWS::Lambda::Function",
             "Properties": {
-                "FunctionName": { "Fn::Sub": "GetImageMetadata-${NameSuffix}" },
+                "FunctionName": {
+                    "Fn::Sub": "GetImageMetadata-${StackSuffix}"
+                },
                 "Code": {
-                    "S3Bucket" : { "Ref": "S3DeploymentBucket"},
-                    "S3Key" : "catalog/image-catalog-ingest.zip"
+                    "S3Bucket": {
+                        "Ref": "S3DeploymentBucket"
+                    },
+                    "S3Key": {
+                        "Fn::Sub": "${StackSuffix}/catalog/image-catalog-ingest.zip"
+                    }
                 },
                 "Handler": "ingest.handle_metadata",
                 "Runtime": "python3.6",
                 "Description": "Transform metadata output of tileserver and insert into elasticsearch",
                 "MemorySize": 128,
                 "Timeout": 15,
-                "Role": {"Fn::GetAtt" : ["IngestRole", "Arn"] },
+                "Role": {
+                    "Fn::GetAtt": [
+                        "IngestRole",
+                        "Arn"
+                    ]
+                },
                 "VpcConfig": {
-                    "SecurityGroupIds": { "Ref": "SecurityGroups" },
-                    "SubnetIds": { "Ref":"Subnet" }
+                    "SecurityGroupIds": {
+                        "Ref": "SecurityGroups"
+                    },
+                    "SubnetIds": {
+                        "Ref": "Subnet"
+                    }
                 },
                 "Environment": {
                     "Variables": {
-                        "es_endpoint": { "Ref" : "ElasticsearchEndpoint" },
-                        "tileserver_url": { "Ref": "TileserverURL" },
-                        "s3_backup_bucket": { "Ref": "S3BackupBucket" }
+                        "es_endpoint": {
+                            "Ref": "ElasticsearchEndpoint"
+                        },
+                        "tileserver_url": {
+                            "Fn::ImportValue": {
+                                "Fn::Sub": "tileserver-${StackSuffix}:TileServerURL"
+                            }
+                        },
+                        "s3_backup_bucket": {
+                            "Ref": "S3BackupBucket"
+                        }
                     }
                 }
             }
@@ -116,18 +134,39 @@
         "LambdaResourcePolicy": {
             "Type": "AWS::Lambda::Permission",
             "Properties": {
-              "FunctionName" : { "Ref" : "IngestImageMetadata" },
-              "Principal": "sns.amazonaws.com",
-              "Action": "lambda:InvokeFunction",
-              "SourceArn" : { "Ref" : "ImageMetadataSNSTopic" }
+                "FunctionName": {
+                    "Ref": "IngestImageMetadata"
+                },
+                "Principal": "sns.amazonaws.com",
+                "Action": "lambda:InvokeFunction",
+                "SourceArn": {
+                    "Fn::ImportValue": {
+                        "Fn::Sub": "${StackSuffix}:MetadataTopicArn"
+                }
+            }
             }
         },
         "IngestSNSSubscription": {
-            "Type" : "AWS::SNS::Subscription",
-            "Properties" : {
-              "Endpoint" : { "Fn::GetAtt" : ["IngestImageMetadata", "Arn"] },
-              "Protocol" : "lambda",
-              "TopicArn" : { "Ref" : "ImageMetadataSNSTopic" }
+            "Type": "AWS::SNS::Subscription",
+            "Properties": {
+                "Endpoint": {
+                    "Fn::GetAtt": [
+                        "IngestImageMetadata",
+                        "Arn"
+                    ]
+                },
+                "Protocol": "lambda",
+                "TopicArn": {
+                    "Fn::ImportValue": {
+                        "Fn::Sub": "${StackSuffix}:MetadataTopicArn"
+                    }
+                }
+            }
+        },
+        "S3BackupBucket": {
+            "Type": "AWS::S3::Bucket",
+            "Properties": {
+                "BucketName": { "Fn::Sub": "advanced-analytics-image-metadata-backup-${StackSuffix}" },
             }
         }
     }

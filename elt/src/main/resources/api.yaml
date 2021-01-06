@@ -62,24 +62,27 @@ paths:
                 properties:
                    message:
                       type: string
-  /boundingbox/{appId}/{url}:
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+  /boundingbox/{url}:
     get:
       tags:
         - developers
       summary: Get bounding box for an image in the viewer
       operationId: getBoundingBox
       description: |
-        Retrieve the boundingBox of the current viewport
+        Retrieve the boundingBox of the given image
       parameters:
         - in: path
-          name: appId
-          description: The appId to load the image to
-          required: true
-          schema:
-            type: string
-        - in: path
           name: url
-          description: The image url to load
+          description: The image url to get the bounding box of
           required: true
           schema:
             type: string
@@ -99,6 +102,17 @@ paths:
                 properties:
                    message:
                       type: string
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+
+  /boundingbox/{appId}/{url}:
     put:
       tags:
         - developers
@@ -109,7 +123,7 @@ paths:
       parameters:
         - in: path
           name: appId
-          description: The appId to load the image to
+          description: The appId for the window to set the viewport of
           required: true
           schema:
             type: string
@@ -135,6 +149,15 @@ paths:
                 properties:
                    message:
                       type: string
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
                       
   /apps:
     get:
@@ -151,11 +174,52 @@ paths:
             application/json:
               schema:
                 type: string
+
+  /viewport/{appId}:
+    get:
+      tags:
+        - developers
+      summary: Returns the bounds of the current viewport for the given appId
+      operationId: getViewport
+      description: |
+        Retrieve the boundingBox of the current viewport
+      parameters:
+        - in: path
+          name: appId
+          description: The appId for the window to get the viewport for
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully received bounding box of viewport
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
   /open/{appId}/{url}:
     get:
       tags:
         - developers
-      summary: Load and set viewport to image in ELT
+      summary: Load and set viewport to the given lat/lon/rset in ELT
       operationId: openImage
       description: |
         Load and set viewport of image in ELT
@@ -184,17 +248,12 @@ paths:
             type: string
         - in: query
           name: zoom
-          description: Zoom level
+          description: Rset Level to load
           schema:
             type: string
         - in: query
           name: newWindow
           description: Should image be loaded into a new window
-          schema:
-            type: boolean
-        - in: query
-          name: resetViewport
-          description: Should the boundaries of the current viewport be reset
           schema:
             type: boolean
       responses:
@@ -206,6 +265,70 @@ paths:
                 type: string
         '400':
           description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+        '404':
+          description: Not Found
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+  /zoomTo/{appId}:
+    get:
+      tags:
+        - developers
+      summary: Center the viewport on a given point and at a given Rset
+      operationId: goToPoint
+      description: |
+        Set viewport of image in ELT
+      parameters:
+        - in: path
+          name: appId
+          description: The appId that the image is loaded in
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: lat
+          description: Latitude of center
+          schema:
+            type: string
+        - in: query
+          name: lon
+          description: Longitude of center
+          schema:
+            type: string
+        - in: query
+          name: zoom
+          description: Rset Level to zoom to (Using the last image loaded to that frame)
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Successfully centered to specified coordinate
+          content:
+            application/json:
+              schema:
+                type: string
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                   message:
+                      type: string
+        '404':
+          description: Not Found
           content:
             application/json:
               schema:

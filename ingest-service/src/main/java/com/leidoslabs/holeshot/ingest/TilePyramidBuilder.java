@@ -19,18 +19,21 @@ import java.awt.Rectangle;
 import java.awt.RenderingHints;
 import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
-import java.awt.image.ColorModel;
 import java.awt.image.Raster;
 import java.awt.image.RenderedImage;
 import java.awt.image.SampleModel;
 import java.awt.image.renderable.ParameterBlock;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.function.DoubleUnaryOperator;
+import java.util.stream.IntStream;
 
 import javax.media.jai.BorderExtender;
 import javax.media.jai.ImageLayout;
@@ -38,12 +41,10 @@ import javax.media.jai.Interpolation;
 import javax.media.jai.JAI;
 import javax.media.jai.ParameterBlockJAI;
 import javax.media.jai.PlanarImage;
-import javax.media.jai.RenderedImageAdapter;
 import javax.media.jai.RenderedOp;
 import javax.media.jai.TileCache;
-import javax.media.jai.util.ImagingListener;
 
-import org.codice.imaging.nitf.core.image.ImageSegment;
+import org.image.common.util.NumberUtils;
 import org.locationtech.jts.geom.Coordinate;
 import org.locationtech.jts.geom.GeometryFactory;
 import org.slf4j.Logger;
@@ -62,10 +63,10 @@ import com.leidoslabs.holeshot.imaging.geotiff.GeoTIFFMetadataSerializer;
 import com.leidoslabs.holeshot.imaging.geotiff.RPCBTreSerializer;
 import com.leidoslabs.holeshot.imaging.io.CheckedSupplier;
 import com.leidoslabs.holeshot.imaging.metadata.TilePyramidDescriptor;
-import com.leidoslabs.holeshot.imaging.nitf.ImageSegmentMetadataSerializer;
+import com.leidoslabs.holeshot.imaging.nitf.RenderedImageSegment;
+import com.leidoslabs.holeshot.imaging.nitf.RenderedImageSegmentMetadataSerializer;
 import com.leidoslabs.holeshot.imaging.photogrammetry.CameraModel;
 import com.leidoslabs.holeshot.imaging.photogrammetry.rpc.RPCBTre;
-import com.sun.media.jai.util.JDKWorkarounds;
 
 import it.geosolutions.jaiext.JAIExt;
 
@@ -103,7 +104,8 @@ public class TilePyramidBuilder {
       // ADD SERIALIZERS TO ObjectMapper
       SimpleModule nitfMetadataModule =
             new SimpleModule("NITFMetadataModule", new Version(1, 0, 0, null));
-      nitfMetadataModule.addSerializer(ImageSegment.class, new ImageSegmentMetadataSerializer());
+      nitfMetadataModule.addSerializer(RenderedImageSegment.class, new RenderedImageSegmentMetadataSerializer());
+      nitfMetadataModule.addSerializer(RPCBTre.class, new RPCBTreSerializer());
       mapper.registerModule(nitfMetadataModule);
 
       SimpleModule geoTIFFMetadataModule =
@@ -134,13 +136,18 @@ public class TilePyramidBuilder {
 
             // Set Metadata
             final CameraModel cameraModel = imageSegment.getCameraModel();
-
+            
+            Point2D[] imgBounds = getImageSpaceBounds(renderedImage);
             Coordinate[] boundaryCoords = new Coordinate[5];
-            boundaryCoords[0] = cameraModel.imageToWorld(new Point2D.Double(0, 0));
-            boundaryCoords[1] = cameraModel.imageToWorld(new Point2D.Double(w, 0));
-            boundaryCoords[2] = cameraModel.imageToWorld(new Point2D.Double(w, h));
-            boundaryCoords[3] = cameraModel.imageToWorld(new Point2D.Double(0, h));
+            boundaryCoords[0] = cameraModel.imageToWorld(imgBounds[0]);
+            boundaryCoords[1] = cameraModel.imageToWorld(imgBounds[1]);
+            boundaryCoords[2] = cameraModel.imageToWorld(imgBounds[2]);
+            boundaryCoords[3] = cameraModel.imageToWorld(imgBounds[3]);
             boundaryCoords[4] = boundaryCoords[0];
+            
+            
+
+            
             GeometryFactory gf = new GeometryFactory();
 
             TilePyramidDescriptor metadata = new TilePyramidDescriptor();
@@ -167,9 +174,7 @@ public class TilePyramidBuilder {
             metadata.setMinRLevel(0);
             metadata.setMaxRLevel(maxRLevel);
 
-            // Write Metadata
             final ImageKey imageKey = imageSegment.getImageKey();
-            callback.handleMetadata(imageKey, metadata);
 
             if (!metadataOnly) {
                TileCache tileCache = JAI.getDefaultInstance().getTileCache();
@@ -198,6 +203,9 @@ public class TilePyramidBuilder {
                
                callback.handleMRF(imageKey);
             }
+            
+            // Write Metadata now that tiling is complete
+            callback.handleMetadata(imageKey, metadata);
          }
       } catch (Exception e) {
          throw new TilePyramidException(e);
@@ -266,6 +274,47 @@ public class TilePyramidBuilder {
       }
       long endTime = System.currentTimeMillis();
       LOGGER.info("Processed level {} in {}s", rlevel, ((endTime - startTime) / 1000));
+   }
+   
+   
+   /**
+    * Return image space bounds as points.
+    * For images with ICHIPB, we normalize these bounds so they are
+    * in full frame coords.
+    * @param img
+    * @return
+    */
+   private Point2D[] getImageSpaceBounds(RenderedImage img) {
+	   int width = img.getWidth();
+	   int height = img.getHeight();
+	   Point2D tl = new Point2D.Double(0.0, 0.0); 
+	   Point2D tr = new Point2D.Double(width, 0.0);
+	   Point2D br = new Point2D.Double(width, height);
+	   Point2D bl = new Point2D.Double(0.0, height);
+	   Point2D[] bounds = new Point2D[] {tl, tr, br, bl};
+	   if (img instanceof RenderedImageSegment) {
+		   RenderedImageSegment ris = (RenderedImageSegment) img;
+		   Map<String, String> flatTre = ris.getImageSegment().getTREsFlat();
+		   if (flatTre.containsKey("ICHIPB_FI_COL_11")) {
+			   double scale = NumberUtils.getDouble(flatTre.get("ICHIPB_SCALE_FACTOR"));
+			   double ox = NumberUtils.getDouble(flatTre.get("ICHIPB_FI_COL_11"));
+			   double oy = NumberUtils.getDouble(flatTre.get("ICHIPB_FI_ROW_11"));
+			   DoubleUnaryOperator xNorm = x -> (x / scale) + ox;
+			   DoubleUnaryOperator yNorm = y -> (y / scale) + oy;
+			   Arrays.stream(bounds).forEach(point -> point.setLocation(xNorm.applyAsDouble(point.getX()), yNorm.applyAsDouble(point.getY())));
+		   }
+	   }
+	   return bounds;
+   }
+   
+   private void testBoundCalc(Coordinate[] geoCords, Coordinate[] computeCords) {
+	   if (geoCords != null) {
+		   for (int i = 0; i < 4; i++) {
+			   if (geoCords[i].distance(computeCords[i]) > 0.001) {
+				   LOGGER.warn(String.format("Computed boundary cords %s do not match IGEOLO cords %s", computeCords[i].toString(), geoCords[i].toString()));
+			   }
+		   }
+	   }
    }
 
    private class TileRunnable implements Runnable {

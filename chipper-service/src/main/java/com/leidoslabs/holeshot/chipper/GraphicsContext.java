@@ -22,7 +22,7 @@ import java.io.IOException;
 import org.lwjgl.opengl.GL;
 import org.lwjgl.system.Platform;
 
-import com.leidoslabs.holeshot.elt.ELTDisplayExecutor;
+import com.leidoslabs.holeshot.elt.ELTDisplayContext;
 
 /**
  * Abstract class for OGL graphics contexts. Provides static methods for
@@ -62,8 +62,6 @@ public abstract class GraphicsContext implements Closeable {
 
    public abstract void swapBuffers();
 
-   public abstract ELTDisplayExecutor getDisplayExecutor();
-
    @Override
    public abstract void close() throws IOException;
 
@@ -72,5 +70,6 @@ public abstract class GraphicsContext implements Closeable {
          GL.create();
       }
    }
+   public abstract ELTDisplayContext getELTDisplayContext();
 
 }

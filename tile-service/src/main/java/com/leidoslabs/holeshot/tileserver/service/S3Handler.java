@@ -133,18 +133,20 @@ public class S3Handler {
       final boolean useCache = (request.getParameter(SKIP_CACHE_PARAMETER) == null);
       final boolean parallelS3 = (request.getParameter(PARALLEL_S3_PARAMETER) != null);
 
-      WriteFrom writeFrom = WriteFrom.CACHE;
-      if (!(useCache && writeFromCache(wholeKey, out))) {
-         if (parallelS3) {
-            writeFromS3InParallel(wholeKey, out, useCache);
-         } else {
-            writeFromS3(wholeKey, out, useCache);
-         }
-         writeFrom = WriteFrom.S3;
+      if (useCache && writeFromCache(wholeKey, out)) {
+          logger.exit();
+          return WriteFrom.CACHE;
       }
+
+      if (parallelS3) {
+         writeFromS3InParallel(wholeKey, out, useCache);
+      } else {
+         writeFromS3(wholeKey, out, useCache);
+      }
+
       logger.exit();
       
-      return writeFrom;
+      return WriteFrom.S3;
    }
 
 
@@ -208,6 +210,36 @@ public class S3Handler {
       }
       logger.exit();
    }
+
+    /**
+     * Places the object in the cache ONLY, doesn't return it.
+     * @param wholeKey
+     * @throws NoSuchElementException
+     * @throws IllegalStateException
+     * @throws Exception
+     */
+    public boolean cacheOnlyFromS3(String wholeKey) throws NoSuchElementException, IllegalStateException, Exception {
+        logger.entry();
+        ExposedByteArrayOutputStream byteStream = null;
+        boolean success = false;
+        try (S3Object singleTileObject = s3Client.getObject(new GetObjectRequest(bucketName, wholeKey));
+             InputStream singleStream = singleTileObject.getObjectContent();) {
+            long fileSize = singleTileObject.getObjectMetadata().getContentLength();
+
+            if (fileSize < MAX_CACHED_TILE_SIZE_IN_BYTES) {
+                byteStream = cacheBufferPool.borrowObject();
+                IOUtils.copyLarge(singleStream, byteStream);
+                if (byteStream.size() > 0) {
+                    cacheAdd(wholeKey, ByteBuffer.wrap(byteStream.buf(), 0, byteStream.size()));
+                    success = true;
+                }
+            }
+        } finally {
+            ResourceUtils.returnToPoolQuietly(cacheBufferPool, byteStream);
+        }
+        logger.exit();
+        return success;
+    }
 
    /**
     * Copy data from inputstream to output using a transfer buffer

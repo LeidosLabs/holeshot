@@ -6,7 +6,7 @@
 
 	<groupId>com.leidoslabs.holeshot</groupId>
 	<artifactId>holeshot</artifactId>
-	<version>0.0.1-SNAPSHOT</version>
+	<version>0.2</version>
 	<packaging>pom</packaging>
 
 	<name>holeshot</name>
@@ -33,11 +33,12 @@
 		<commons-pool.version>2.4.3</commons-pool.version>
 		<commons-text.version>1.6</commons-text.version>
 		<dyn4j.version>3.3.0</dyn4j.version>
-		<ehcache.version>3.6.0</ehcache.version>
+		<ehcache.version>3.9.0</ehcache.version>
 		<geo.version>0.7.1</geo.version>
+		<geotools.version>23.1</geotools.version>
 		<google-api-client.version>1.23.0</google-api-client.version>
 		<gson.version>2.8.2</gson.version>
-		<guava.version>28.0-jre</guava.version>
+		<guava.version>29.0-jre</guava.version>
 		<httpclient.version>4.5.4</httpclient.version>
 		<jackson.version>2.10.2</jackson.version>
 		<jacoco.version>0.7.5.201505241946</jacoco.version>
@@ -52,18 +53,19 @@
 		<jaxb2-maven-plugin.version>2.4</jaxb2-maven-plugin.version>
 		<jersey.version>2.7</jersey.version>
 		<jetty.version>9.4.26.v20200117</jetty.version>
-		<joml.version>1.9.8</joml.version>
+		<joml.version>1.9.25</joml.version>
 		<json.version>20180130</json.version>
 		<jsonpath.version>2.4.0</jsonpath.version>
 		<jts.version>1.16.1</jts.version>
 		<junit.version>4.12</junit.version>
 		<jwt.version>3.8.0</jwt.version>
 		<jwks.version>0.8.1</jwks.version>
-		<leidosimaging.version>0.0.1-SNAPSHOT</leidosimaging.version>
+		<leidosimaging.version>0.2</leidosimaging.version>
 		<lettuce.version>5.0.1.RELEASE</lettuce.version>
 		<license-maven-plugin.version>1.20</license-maven-plugin.version>
 		<log4j.version>2.11.1</log4j.version>
 		<lwjgl.version>3.2.3</lwjgl.version>
+		<mapsforge.version>0.14.0</mapsforge.version>
 		<maven.version>3.5.4</maven.version>
 		<maven-antrun-plugin.version>1.8</maven-antrun-plugin.version>
 		<maven-assembly-plugin.version>3.1.1</maven-assembly-plugin.version>
@@ -77,7 +79,7 @@
 		<mavencompilerplugin.version>3.3</mavencompilerplugin.version>
 		<mavenjavadocplugin.version>3.1.1</mavenjavadocplugin.version>
 		<mavenshadeplugin.version>3.2.1</mavenshadeplugin.version>
-		<mavensurefireplugin.version>2.20</mavensurefireplugin.version>
+		<mavensurefireplugin.version>3.0.0-M1</mavensurefireplugin.version>
 		<mockito.version>2.0.2-beta</mockito.version>
 		<nexus-staging-maven-plugin.version>1.6.8</nexus-staging-maven-plugin.version>
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
@@ -95,10 +97,11 @@
 		<swagger-ui.version>3.18.3</swagger-ui.version>
 		<swt.version>3.113.0</swt.version>
 		<systemtray.version>3.17</systemtray.version>
+		<elasticsearch.version>7.1.0</elasticsearch.version>
 		<additionalparam>-Xdoclint:none</additionalparam>
 		<doclint>none</doclint>
 	</properties>
-	
+
 	<modules>
 		<module>glcanvas</module>
 		<module>edh2-security-core</module>
@@ -114,6 +117,7 @@
 		<module>catalog</module>
 		<module>catalog-wms</module>
 		<module>catalog-wmts</module>
+		<module>analytics</module>
 	</modules>
 
 	<dependencyManagement>
@@ -338,6 +342,16 @@
 				<groupId>org.locationtech.jts.io</groupId>
 				<artifactId>jts-io-common</artifactId>
 				<version>${jts.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.mapsforge</groupId>
+				<artifactId>mapsforge-map-awt</artifactId>
+				<version>${mapsforge.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.mapsforge</groupId>
+				<artifactId>mapsforge-theme</artifactId>
+				<version>${mapsforge.version}</version>
 			</dependency>
 			<dependency>
 				<groupId>commons-cli</groupId>
@@ -922,12 +936,34 @@
 				<artifactId>SystemTray</artifactId>
 				<version>${systemtray.version}</version>
 			</dependency>
+			<dependency>
+				<groupId>org.elasticsearch.client</groupId>
+				<artifactId>elasticsearch-rest-high-level-client</artifactId>
+				<version>${elasticsearch.version}</version>
+			</dependency>
+			<dependency>
+				<groupId>org.elasticsearch</groupId>
+				<artifactId>elasticsearch</artifactId>
+				<version>${elasticsearch.version}</version>
+			</dependency>
 		</dependencies>
 	</dependencyManagement>
 
 	<build>
 		<pluginManagement>
 			<plugins>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-site-plugin</artifactId>
+                    <version>3.7.1</version>
+                </plugin>
+
+                <plugin>
+                    <groupId>org.apache.maven.plugins</groupId>
+                    <artifactId>maven-project-info-reports-plugin</artifactId>
+                    <version>3.0.0</version>
+                </plugin>
 				<plugin>
 					<groupId>org.apache.maven.plugins</groupId>
 					<artifactId>maven-antrun-plugin</artifactId>
@@ -983,44 +1019,44 @@
 					<artifactId>maven-assembly-plugin</artifactId>
 					<version>${maven-assembly-plugin.version}</version>
 				</plugin>
-			    <plugin>
-				   <groupId>org.apache.maven.plugins</groupId>
-				   <artifactId>maven-javadoc-plugin</artifactId>
-				   <version>${mavenjavadocplugin.version}</version>
+				<plugin>
+					<groupId>org.apache.maven.plugins</groupId>
+					<artifactId>maven-javadoc-plugin</artifactId>
+					<version>${mavenjavadocplugin.version}</version>
 				</plugin>
-			    <plugin>
-			   	   <groupId>org.codehaus.mojo</groupId>
-				   <artifactId>license-maven-plugin</artifactId>
-				   <version>${license-maven-plugin.version}</version>
-				</plugin>				
- 			    <plugin>
-				   <groupId>org.sonatype.plugins</groupId>
-				   <artifactId>nexus-staging-maven-plugin</artifactId>
-				   <version>${nexus-staging-maven-plugin.version}</version>
-			    </plugin>
-			 </plugins>
+				<plugin>
+					<groupId>org.codehaus.mojo</groupId>
+					<artifactId>license-maven-plugin</artifactId>
+					<version>${license-maven-plugin.version}</version>
+				</plugin>
+				<plugin>
+					<groupId>org.sonatype.plugins</groupId>
+					<artifactId>nexus-staging-maven-plugin</artifactId>
+					<version>${nexus-staging-maven-plugin.version}</version>
+				</plugin>
+			</plugins>
 		</pluginManagement>
 		<plugins>
-            <plugin>
-              <groupId>org.apache.maven.plugins</groupId>
-              <artifactId>maven-enforcer-plugin</artifactId>
-              <version>${maven-enforcer-plugin.version}</version>
-              <executions>
-                 <execution>
-                    <id>enforce-maven</id>
-                    <goals>
-                       <goal>enforce</goal>
-                    </goals>
-                    <configuration>
-                       <rules>
-                          <requireMavenVersion>
-                             <version>${maven.version}</version>
-                          </requireMavenVersion>
-                       </rules>    
-                    </configuration>
-                 </execution>
-              </executions>
-            </plugin>		
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-enforcer-plugin</artifactId>
+				<version>${maven-enforcer-plugin.version}</version>
+				<executions>
+					<execution>
+						<id>enforce-maven</id>
+						<goals>
+							<goal>enforce</goal>
+						</goals>
+						<configuration>
+							<rules>
+								<requireMavenVersion>
+									<version>${maven.version}</version>
+								</requireMavenVersion>
+							</rules>
+						</configuration>
+					</execution>
+				</executions>
+			</plugin>
 			<plugin>
 				<groupId>org.codehaus.mojo</groupId>
 				<artifactId>license-maven-plugin</artifactId>
@@ -1078,10 +1114,6 @@
 	<profiles>
 		<profile>
 			<id>public</id>
-			<activation>
-				<activeByDefault>true</activeByDefault>
-			</activation>
-
 			<repositories>
 				<!--repository> <id>central</id> <name>central</name> <url>https://central.maven.org/maven2/</url> 
 					</repository -->
@@ -1232,6 +1264,9 @@
 		</profile>
 		<profile>
 			<id>httpsNexus</id>
+			<activation>
+				<activeByDefault>true</activeByDefault>
+			</activation>
 			<repositories>
 				<repository>
 					<id>leidoslabs-central</id>

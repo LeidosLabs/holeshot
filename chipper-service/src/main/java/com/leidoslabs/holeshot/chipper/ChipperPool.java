@@ -41,8 +41,8 @@ public class ChipperPool extends GenericObjectPool<ImageChipper> {
    private static final int ABANDON_TIMEOUT_IN_SECONDS = 30;
 
 
-   public ChipperPool(ELTDisplayExecutor eltDisplayExecutor) throws IllegalArgumentException, Exception {
-      super(new ChipperPoolFactory(eltDisplayExecutor), getConfig(), getAbandonedConfig());
+   public ChipperPool() throws IllegalArgumentException, Exception {
+      super(new ChipperPoolFactory(), getConfig(), getAbandonedConfig());
       PoolUtils.prefill(this, NUMBER_OF_CHIPPERS);
    }
 
@@ -83,10 +83,8 @@ public class ChipperPool extends GenericObjectPool<ImageChipper> {
     */
    public static class ChipperPoolFactory extends BasePooledObjectFactory<ImageChipper> {
       private static final Logger LOGGER = LoggerFactory.getLogger(ChipperPoolFactory.class);
-      private final ELTDisplayExecutor eltDisplayExecutor;
-      public ChipperPoolFactory(ELTDisplayExecutor eltDisplayExecutor) {
+      public ChipperPoolFactory() {
          super();
-         this.eltDisplayExecutor = eltDisplayExecutor;
       }
 
       @Override
@@ -95,20 +93,7 @@ public class ChipperPool extends GenericObjectPool<ImageChipper> {
        * synchronous task for the eltDisplayExecutor
        */
       public ImageChipper create() throws Exception {
-         final AtomicReference<ImageChipper> result = new AtomicReference<ImageChipper>(null);
-         final AtomicReference<Exception> exceptionRef = new AtomicReference<Exception>(null);
-         eltDisplayExecutor.submit(ExecMode.SYNCHRONOUS, () -> {
-            try {
-               LOGGER.info("Creating Chipper");
-               result.set(new ImageChipper());
-            } catch (Exception e) {
-               exceptionRef.set(e);
-            }
-         });
-         if (exceptionRef.get() != null) {
-            throw exceptionRef.get();
-         }
-         return result.get();
+    	  return new ImageChipper();
       }
 
       /**

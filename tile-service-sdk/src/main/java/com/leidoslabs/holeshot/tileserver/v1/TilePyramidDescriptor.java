@@ -42,12 +42,6 @@ import com.leidoslabs.holeshot.security.edh2.PolicyRule;
 import org.locationtech.jts.geom.Envelope;
 import org.locationtech.jts.geom.Polygon;
 
-/**
- * Placeholder class to be replaced!!!!! TODO: Need to incorporate R. Robert's changes to the
- * metadata classes here....
- * 
- * @deprecated
- */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 public class TilePyramidDescriptor implements FullEDH2Group, Serializable, Cacheable {
 

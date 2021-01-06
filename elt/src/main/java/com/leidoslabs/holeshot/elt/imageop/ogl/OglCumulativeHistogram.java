@@ -32,6 +32,8 @@ import java.nio.FloatBuffer;
 
 import org.image.common.util.CloseableUtils;
 import org.lwjgl.BufferUtils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import com.leidoslabs.holeshot.elt.gpuimage.GLInternalFormat;
 import com.leidoslabs.holeshot.elt.gpuimage.HistogramType;
@@ -45,136 +47,138 @@ import com.leidoslabs.holeshot.elt.imageop.SummedArea;
 /**
  * Given previously computed histogram, uses a shader to compute cumulative histogram
  */
-class OglCumulativeHistogram extends OglAbstractImageOp implements CumulativeHistogram {
-   private float[] cumulativeHistogram;
-   private FloatBuffer cumulativeHistogramBuffer;
-   private Framebuffer cumulativeHistogramFramebuffer;
-   private Histogram histogram;
-   private QuadDrawVAO quadDrawVAO;
+class OglCumulativeHistogram extends OglAbstractImageOpPrimitive implements CumulativeHistogram {
+	private static final Logger LOGGER = LoggerFactory.getLogger(OglCumulativeHistogram.class);
 
-   private ShaderProgram shader;
+	private static final String SHADER_KEY = OglCumulativeHistogram.class.getName();
+	private float[] cumulativeHistogram;
+	private FloatBuffer cumulativeHistogramBuffer;
+	private Framebuffer cumulativeHistogramFramebuffer;
+	private Histogram histogram;
+	private QuadDrawVAO quadDrawVAO;
+
+	private SummedArea summedArea;
+
+	public OglCumulativeHistogram() {}
+
+	@Override
+	public Framebuffer getResultFramebuffer() {
+		return cumulativeHistogramFramebuffer;
+	}
+
+	@Override
+	protected void doRender() {
+		try {
+			final Histogram histogram = getHistogram();
+			Dimension histogramSize = histogram.getResultFramebuffer().getSize();
+
+			initializeFramebuffer(histogram);
+
+			// Bind to the Histogram Buffer for Writing
+			cumulativeHistogramFramebuffer.bind();
+
+			// Setup the current raw image framebuffer as the texture for the vertex shaders to read from.
+			// Assign it to GL_TEXTURE1 and
+			// set the uniform parameter so that the vertex shaders know which texture to read from.
 
 
-   private SummedArea summedArea;
+			glActiveTexture(GL_TEXTURE1);
+			glBindTexture(GL_TEXTURE_2D,
+					getSummedArea().getResultFramebuffer().getTexture().getId());
+			glActiveTexture(GL_TEXTURE0);
 
-   public OglCumulativeHistogram() {}
+			ShaderProgram shader = getELTDisplayContext().getShader(SHADER_KEY, HistogramType.class,
+					HistogramType.Shaders.PASSTHROUGH_VERTEX_SHADER,
+					HistogramType.Shaders.CUMULATIVE_HISTOGRAM_SHADER);
+					
+			shader.useProgram();
 
-   @Override
-   public Framebuffer getResultFramebuffer() {
-      return cumulativeHistogramFramebuffer;
-   }
+			// Set the texture that the vertex shader should read from
+			glUniform1i(shader.getUniformLocation("summedAreaData"), 1);
+			glUniform2iv(shader.getUniformLocation("fbDim"), new int[] {histogramSize.width, histogramSize.height});
 
-   @Override
-   protected void doRender() {
-      try {
-         final Histogram histogram = getHistogram();
-         Dimension histogramSize = histogram.getResultFramebuffer().getSize();
+			glUniform1i(shader.getUniformLocation("buckets"), histogram.getBuckets());
+			glUniform1i(shader.getUniformLocation("maxPixel"), getMaxPixelValue());
 
-         initializeFramebuffer(histogram);
+			//      shader.uniform(gl4, bucketsUniformData);
+			//      shader.uniform(gl4, maxPixelUniformData);
 
-         // Bind to the Histogram Buffer for Writing
-         cumulativeHistogramFramebuffer.bind();
+			this.quadDrawVAO.draw();
 
-         // Setup the current raw image framebuffer as the texture for the vertex shaders to read from.
-         // Assign it to GL_TEXTURE1 and
-         // set the uniform parameter so that the vertex shaders know which texture to read from.
+			glUseProgram(0);
 
+			if (OglHistogram.DEBUG) {
+				readCumulativeHistogram();
 
-         glActiveTexture(GL_TEXTURE1);
-         glBindTexture(GL_TEXTURE_2D,
-               getSummedArea().getResultFramebuffer().getTexture().getId());
-         glActiveTexture(GL_TEXTURE0);
+				// Dump the histogram to STDOUT for debugging purposes
+				System.out.println("BEGIN CUMULATIVE HISTOGRAM");
+				dumpCumulativeHistogram(false);
+				System.out.println("END CUMULATIVE HISTOGRAM");
+			}
 
-         shader.useProgram();
+		} catch (Throwable e) {
+			e.printStackTrace();
+		} finally {
+			// Cleanup State
+			this.cumulativeHistogramFramebuffer.unbind();
+		}
+	}
 
-         // Set the texture that the vertex shader should read from
-         glUniform1i(shader.getUniformLocation("summedAreaData"), 1);
-         glUniform2iv(shader.getUniformLocation("fbDim"), new int[] {histogramSize.width, histogramSize.height});
+	private void dumpCumulativeHistogram(boolean ignoreZeros) {
+		OglHistogram.dump3DArray(cumulativeHistogram, ignoreZeros, "CUMULATIVE HISTOGRAM",
+				getHistogram().getBuckets());
+	}
 
-         glUniform1i(shader.getUniformLocation("buckets"), histogram.getBuckets());
-         glUniform1i(shader.getUniformLocation("maxPixel"), getMaxPixelValue());
+	private Histogram getHistogram() {
+		if (histogram == null) {
+			histogram = this.getImageChain().getPreviousImageOp(this, Histogram.class);
+		}
+		return histogram;
+	}
 
-         //      shader.uniform(gl4, bucketsUniformData);
-         //      shader.uniform(gl4, maxPixelUniformData);
+	private SummedArea getSummedArea() {
+		if (summedArea == null) {
+			summedArea = this.getImageChain().getPreviousImageOp(this, SummedArea.class);
+		}
+		return summedArea;
+	}
 
-         this.quadDrawVAO.draw();
+	private void initializeFramebuffer(Histogram histogram) throws Exception {
+		if (this.quadDrawVAO == null) {
+			this.quadDrawVAO = new QuadDrawVAO(QuadDrawVAO.FULL_UNIFORM_QUAD, 0);
+		}
+		final int maxTextureSize = histogram.getMaxTextureSize();
+		final int numRows = histogram.getNumRows();
+		final Dimension cumulativeHistogramSize = new Dimension(maxTextureSize, numRows);
 
-         glUseProgram(0);
+		if (this.cumulativeHistogramFramebuffer == null || !cumulativeHistogramFramebuffer.getSize().equals(cumulativeHistogramSize)) {
+			this.cumulativeHistogramFramebuffer = new Framebuffer(cumulativeHistogramSize, GLInternalFormat.GlInternalFormatRGBA32F, getELTDisplayContext());
+		}
+	}
 
-         if (OglHistogram.DEBUG) {
-            readCumulativeHistogram();
+	private void readCumulativeHistogram() {
+		final Histogram histogram = getHistogram();
+		Dimension histogramSize = histogram.getResultFramebuffer().getSize();
 
-            // Dump the histogram to STDOUT for debugging purposes
-            dumpCumulativeHistogram(false);
-         }
+		if (cumulativeHistogram == null || cumulativeHistogram.length != histogramSize.getWidth()
+				* histogramSize.getHeight() * OglHistogram.HISTOGRAM_BANDS) {
+			this.cumulativeHistogram = new float[histogramSize.width * histogramSize.height
+			                                     * OglHistogram.HISTOGRAM_BANDS];
+			this.cumulativeHistogramBuffer = BufferUtils.createFloatBuffer(cumulativeHistogram.length);
+		}
 
-      } catch (Throwable e) {
-         e.printStackTrace();
-      } finally {
-         // Cleanup State
-         this.cumulativeHistogramFramebuffer.unbind();
-      }
-   }
+		cumulativeHistogramFramebuffer.readFramebuffer(cumulativeHistogramBuffer, cumulativeHistogram);
+	}
+	@Override
+	public void close() throws IOException {
+		CloseableUtils.close(cumulativeHistogramFramebuffer,
+				quadDrawVAO);
+	}
 
-   private void dumpCumulativeHistogram(boolean ignoreZeros) {
-      OglHistogram.dump3DArray(cumulativeHistogram, ignoreZeros, "CUMULATIVE HISTOGRAM",
-            getHistogram().getBuckets());
-   }
-
-   private Histogram getHistogram() {
-      if (histogram == null) {
-         histogram = this.getImageChain().getPreviousImageOp(this, Histogram.class);
-      }
-      return histogram;
-   }
-
-   private SummedArea getSummedArea() {
-      if (summedArea == null) {
-         summedArea = this.getImageChain().getPreviousImageOp(this, SummedArea.class);
-      }
-      return summedArea;
-   }
-
-   private void initializeFramebuffer(Histogram histogram) throws IOException {
-      if (this.shader == null) {
-         this.shader = new ShaderProgram(HistogramType.class,
-               HistogramType.Shaders.PASSTHROUGH_VERTEX_SHADER,
-               HistogramType.Shaders.CUMULATIVE_HISTOGRAM_SHADER);
-         this.quadDrawVAO = new QuadDrawVAO(QuadDrawVAO.FULL_UNIFORM_QUAD, 0);
-      }
-      final int maxTextureSize = histogram.getMaxTextureSize();
-      final int numRows = histogram.getNumRows();
-      final Dimension cumulativeHistogramSize = new Dimension(maxTextureSize, numRows);
-
-      if (this.cumulativeHistogramFramebuffer == null || !cumulativeHistogramFramebuffer.getSize().equals(cumulativeHistogramSize)) {
-         this.cumulativeHistogramFramebuffer = new Framebuffer(cumulativeHistogramSize, GLInternalFormat.GlInternalFormatRGBA32F, getELTDisplayContext());
-      }
-   }
-
-   private void readCumulativeHistogram() {
-      final Histogram histogram = getHistogram();
-      Dimension histogramSize = histogram.getResultFramebuffer().getSize();
-
-      if (cumulativeHistogram == null || cumulativeHistogram.length != histogramSize.getWidth()
-            * histogramSize.getHeight() * OglHistogram.HISTOGRAM_BANDS) {
-         this.cumulativeHistogram = new float[histogramSize.width * histogramSize.height
-                                              * OglHistogram.HISTOGRAM_BANDS];
-         this.cumulativeHistogramBuffer = BufferUtils.createFloatBuffer(cumulativeHistogram.length);
-      }
-
-      cumulativeHistogramFramebuffer.readFramebuffer(cumulativeHistogramBuffer, cumulativeHistogram);
-   }
-   @Override
-   public void close() throws IOException {
-      CloseableUtils.close(cumulativeHistogramFramebuffer,
-                           quadDrawVAO,
-                           shader);
-   }
-
-   @Override
-   public void reset() {
-      clearFramebuffer(0.0f, 0.0f, 0.0f, 1.0f, cumulativeHistogramFramebuffer);
-   }
+	@Override
+	public void reset() {
+		clearFramebuffer(0.0f, 0.0f, 0.0f, 1.0f, cumulativeHistogramFramebuffer);
+	}
 
 
 

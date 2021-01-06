@@ -16,14 +16,12 @@
 
 package com.leidoslabs.holeshot.elt.coord;
 
-import org.joml.Matrix4d;
-import org.joml.Vector2d;
-import org.joml.Vector3d;
+import org.joml.Vector2ic;
+import org.joml.Vector3dc;
+import org.locationtech.jts.geom.Coordinate;
 
-import com.leidoslabs.holeshot.elt.tileserver.TileRef;
-import com.leidoslabs.holeshot.elt.tileserver.TileserverImage;
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
 import com.leidoslabs.holeshot.imaging.coord.GeointCoordinate;
-import com.leidoslabs.holeshot.imaging.coord.ImageScale;
 
 /**
  * Abstract representation of a Geointcoordinate in ELT.
@@ -33,26 +31,15 @@ import com.leidoslabs.holeshot.imaging.coord.ImageScale;
 public abstract class ELTCoordinate<C> extends GeointCoordinate<C> {
    private ImageWorld imageWorld;
 
-   protected ELTCoordinate(ImageWorld imageWorld, C sourceCoordinate, ImageScale imageScale) {
-      super(imageWorld.getTopTile().getImage().getCameraModel(), sourceCoordinate, imageScale);
+   protected ELTCoordinate(ImageWorld imageWorld, C sourceCoordinate) {
+      super(sourceCoordinate);
       this.imageWorld = imageWorld;
    }
-   public abstract Vector3d getOpenGLCoordinate();
-   public abstract Vector2d getScreenCoordinate();
+   public abstract Vector3dc getOpenGLCoordinate();
+   public abstract Vector2ic getScreenCoordinate();
+   public abstract Coordinate getProjectedCoordinate();
 
    protected ImageWorld getImageWorld() {
       return this.imageWorld;
-   }
-   protected TileRef getTopTile() {
-      return this.imageWorld.getTopTile();
-   }
-   protected TileserverImage getImage() {
-      return getTopTile().getImage();
-   }
-   /**
-    * @return openGL to screen transformation 
-    */
-   protected Matrix4d openGLToScreen() {
-      return getImageWorld().getCurrentProjection().mul(getImageWorld().getCurrentModel());
    }
 }

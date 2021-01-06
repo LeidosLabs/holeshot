@@ -16,12 +16,14 @@
 
 package com.leidoslabs.holeshot.elt.observations;
 
-import org.locationtech.jts.geom.Coordinate;
-import org.locationtech.jts.geom.LinearRing;
-
 import java.util.Arrays;
 import java.util.Map;
 import java.util.stream.Stream;
+
+import org.locationtech.jts.geom.Coordinate;
+import org.locationtech.jts.geom.LinearRing;
+
+import com.leidoslabs.holeshot.elt.utils.GeometryUtils;
 
 /**
  * Observation parameterized with a LinearRing (Polygon)
@@ -37,7 +39,7 @@ public class PolygonObservation extends Observation<LinearRing> {
     }
 
     public PolygonObservation(Coordinate[] coords, Map<String, String> properties) {
-        super(factory.createLinearRing(
+        super(GeometryUtils.GEOMETRY_FACTORY.createLinearRing(
                 Stream.concat(Arrays.stream(coords), Stream.of(coords[0])).toArray(Coordinate[]::new)), properties);
     }
 }

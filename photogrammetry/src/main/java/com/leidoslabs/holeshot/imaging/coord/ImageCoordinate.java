@@ -26,27 +26,37 @@ import com.leidoslabs.holeshot.imaging.photogrammetry.CameraModel;
  */
 public class ImageCoordinate extends GeointCoordinate<Point2D> {
 
-    /**
-     * @param cameraModel The camera model of the image this coordinate is in
-     * @param coordinate The source coordinate
-     * @param imageScale The ImageScale object to track image scale and convert between different rSets
-     */
-  public ImageCoordinate(CameraModel cameraModel, Point2D coordinate, ImageScale imageScale) {
-    super(cameraModel, coordinate, imageScale);
-  }
+	private CameraModel cameraModel;
+	private ImageScale imageScale;
 
-  @Override
-  public Coordinate getGeodeticCoordinate() {
-    return getCameraModel().imageToWorld(getR0ImageCoordinate());
-  }
+	/**
+	 * @param cameraModel The camera model of the image this coordinate is in
+	 * @param coordinate The source coordinate
+	 * @param imageScale The ImageScale object to track image scale and convert between different rSets
+	 */
+	public ImageCoordinate(CameraModel cameraModel, Point2D coordinate, ImageScale imageScale) {
+		super(coordinate);
+		this.cameraModel = cameraModel;
+		this.imageScale = imageScale;
+	}
 
-  @Override
-  public Point2D getRsetImageCoordinate() {
-    return getSourceCoordinate();
-  }
+	public CameraModel getCameraModel() {
+		return cameraModel;
+	}
+	public ImageScale getImageScale() {
+		return imageScale;
+	}
 
-  @Override
-  public Point2D getR0ImageCoordinate() {
-    return scaleUpToR0(getSourceCoordinate());
-  }
+	@Override
+	public Coordinate getGeodeticCoordinate() {
+		return getCameraModel().imageToWorld(getR0ImageCoordinate());
+	}
+
+	public Point2D getRsetImageCoordinate() {
+		return getSourceCoordinate();
+	}
+
+	public Point2D getR0ImageCoordinate() {
+		return imageScale.scaleUpToR0(getSourceCoordinate());
+	}
 }

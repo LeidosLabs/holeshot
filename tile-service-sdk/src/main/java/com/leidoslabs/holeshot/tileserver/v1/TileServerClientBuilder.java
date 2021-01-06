@@ -81,6 +81,17 @@ public class TileServerClientBuilder {
     instance.setMaxTotal(max);
     return this;
   }
+
+    /**
+     * Sets the username that will be passed along in requests for logging purposes. If not used or "anonymous",
+     * then the requests will not include the username information
+     * @param username the users id
+     * @return this client builder
+     */
+  public TileServerClientBuilder withUsername(String username) {
+      instance.setUsername(username);
+      return this;
+  }
   
   
   /**

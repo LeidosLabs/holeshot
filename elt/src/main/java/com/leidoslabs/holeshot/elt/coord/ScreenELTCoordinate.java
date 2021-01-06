@@ -16,54 +16,38 @@
 
 package com.leidoslabs.holeshot.elt.coord;
 
-import java.awt.geom.Point2D;
-
-import org.joml.Matrix4d;
-import org.joml.Vector2d;
-import org.joml.Vector3d;
+import org.joml.Vector2ic;
+import org.joml.Vector3dc;
 import org.locationtech.jts.geom.Coordinate;
 
-import com.leidoslabs.holeshot.imaging.coord.ImageCoordinate;
-import com.leidoslabs.holeshot.imaging.coord.ImageScale;
+import com.leidoslabs.holeshot.elt.viewport.ImageWorld;
 
 /**
  * Representation of Screen coordinate with ELTCoordinate functionality
  *
  */
-public class ScreenELTCoordinate extends ELTCoordinate<Vector2d> {
-   public ScreenELTCoordinate(ImageWorld world, Vector2d coordinate, ImageScale imageScale) {
-      super(world, coordinate, imageScale);
-   }
+public class ScreenELTCoordinate extends ELTCoordinate<Vector2ic> {
+	public ScreenELTCoordinate(ImageWorld imageWorld, Vector2ic coordinate) {
+		super(imageWorld, coordinate);
+	}
 
-   @Override
-   public Coordinate getGeodeticCoordinate() {
-      return new ImageCoordinate(getCameraModel(), getR0ImageCoordinate(), ImageScale.forRset(0)).getGeodeticCoordinate();
-   }
+	@Override
+	public Coordinate getGeodeticCoordinate() {
+		return getImageWorld().screenToGeodetic(getSourceCoordinate());
+	}
 
-   @Override
-   public Vector3d getOpenGLCoordinate() {
-      Vector2d screen = getSourceCoordinate();
-      Vector3d openGL = new Vector3d();
-      final Matrix4d openGLToScreen = openGLToScreen();
+	@Override
+	public Vector3dc getOpenGLCoordinate() {
+		return getImageWorld().screenToClip(getSourceCoordinate());
+	}
+	@Override
+	public Vector2ic getScreenCoordinate() {
+		return getSourceCoordinate();
+	}
 
-      openGLToScreen.unproject(screen.x,
-            getImageWorld().getCurrentViewport().getHeight()-screen.y-1.0,
-            0.0,
-            getData(getImageWorld().getCurrentViewport()),
-            openGL);
-      openGL.z = -getImageScale().getRset();
-
-      return openGL;
-   }
-
-   @Override
-   public Point2D getR0ImageCoordinate() {
-      return new OpenGLELTCoordinate(getImageWorld(), getOpenGLCoordinate(), getImageScale()).getR0ImageCoordinate();
-   }
-
-   @Override
-   public Vector2d getScreenCoordinate() {
-      return getSourceCoordinate();
-   }
+	@Override
+	public Coordinate getProjectedCoordinate() {
+		return getImageWorld().screenToProjected(getSourceCoordinate());
+	}   
 
 }

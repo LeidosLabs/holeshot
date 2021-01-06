@@ -16,9 +16,13 @@
 
 package com.leidoslabs.holeshot.elt.imageop;
 
+import com.leidoslabs.holeshot.elt.tileserver.TileserverImage;
+
 /**
  * Interface for RawImage ImageOps 
  */
-public interface RawImage extends ImageOp {
+public interface RawImage extends ImageOpPrimitive {
+	public TileserverImage getImage();
+	public void setImage(TileserverImage image);
 
 }

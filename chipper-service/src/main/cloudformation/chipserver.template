@@ -58,17 +58,17 @@
     },
     "PublicZoneID" : {
       "Description" : "The Route53 Public Zone",
-      "Default" : "ZTV3G174437K",
+      "Default" : "ZZZZZZZZZZZZ",
       "Type" : "String"
     },
     "PrivateZoneID" : {
       "Description" : "The Route53 Private Zone",
-      "Default" : "Z0827693CMTT0OYSKLZX",
+      "Default" : "ZZZZZZZZZZZZzzzzzzzzzz",
       "Type" : "String"
     },
     "HostedZoneCertificateArn" : {
       "Description" : "The ARN to the Parent Domain's Certificate",
-      "Default" : "arn:aws:acm:us-east-1:199974664221:certificate/430f2509-82b5-4bcb-bb35-d0fc384df07a",
+      "Default" : "arn:aws:acm:us-east-1:555555555555:certificate/430f2509-82b5-4bcb-bb35-d0fc384df07a",
       "Type" : "String"
     },
     "ApiKeyID" : {
@@ -94,15 +94,13 @@
     },
     "PermissionsBoundary" : {
       "Description" : "The DeveloperPolicy for creating IAM Roles",
-      "Default" : "arn:aws:iam::199974664221:policy/DeveloperPolicy",
+      "Default" : "arn:aws:iam::555555555555:policy/DeveloperPolicy",
       "Type" : "String"
     },
     "StackSuffix" : {
       "Description" : "The suffix that will be appended to all artifact names in the stack",
-      "Default" : 0,
-      "Type" : "Number",
-      "MinValue": 0,
-      "MaxValue": 99
+      "Default" : "dev",
+      "Type" : "String"
     },
     "PrimaryStack" : {
       "Description" : "The suffix that will be appended to all artifact names in the stack",
@@ -223,7 +221,7 @@
     "ChipperInstanceProfile" : {
       "Type": "AWS::IAM::InstanceProfile",
       "Properties": {
-        "InstanceProfileName" : { "Fn::Sub": "ChipserverInstanceProfile-${StackSuffix}" },
+        "InstanceProfileName" : { "Fn::Sub": "AADev-ChipserverInstanceProfile-${StackSuffix}" },
         "Path": "/",
         "Roles": [ { "Ref": "ChipperRole" } ]
       }
@@ -373,14 +371,20 @@
                 "group"  : "root",
                 "authentication": "S3AccessByRole"
               },
-              "/root/.leidos-sdk/credentials" : {
+              "/root/.holeshot/holeshot.properties" : {
                 "content": { "Fn::Join" : ["", [
-                      "leidos_sdk_secret_access_key={{resolve:ssm:/Tileserver/TileserverPassword:1}}\n",
-                      "leidos_sdk_catalog_key={{resolve:ssm:/Catalog/CatalogKey:1}}\n" ] ] },
+                      "holeshot_tileservice_key={{resolve:ssm:/Tileserver/TileserverPassword:1}}\n",
+                      "holeshot_catalog_key={{resolve:ssm:/Catalog/CatalogKey:1}}\n" ] ] },
                 "mode"   : "000600",
                 "owner"  : "root",
                 "group"  : "root"
-              }
+              },
+              "/root/installInspectorAgent" : {
+                  "source" : "https://inspector-agent.amazonaws.com/linux/latest/install",
+                  "mode"   : "000755",
+                  "owner"  : "root",
+                  "group"  : "root"
+               }              
             },
             "commands" : {
               "01-yumupdate" : {
@@ -413,7 +417,13 @@
               "10-reboot-after-nvidia" : {
                 "command" :  "ln -s /usr/sbin/reboot /usr/local/etc/runonce.d/03reboot"
               },
-              "11-reboot" : {
+              "11-installSSMAgent" : {
+            	  "command" : "yum install -y https://s3.amazonaws.com/ec2-downloads-windows/SSMAgent/latest/linux_amd64/amazon-ssm-agent.rpm"
+              },
+              "12-installInspectorAgent" : {
+                  "command" : "/root/installInspectorAgent"
+              },
+              "13-reboot" : {
                 "command" : "/sbin/shutdown -r now"
               }
             },
@@ -474,7 +484,7 @@
       },
       "CreationPolicy" : {
         "ResourceSignal" : {
-          "Timeout" : "PT5M",
+          "Timeout" : "PT15M",
           "Count"   : "1"
         }
       }
@@ -674,7 +684,7 @@
           "Handler": "index.handler",
           "MemorySize": 128,
           "Role": {"Fn::GetAtt": ["AuthLambdaRole", "Arn"]},
-          "Runtime": "nodejs8.10",
+          "Runtime": "nodejs12.x",
           "Timeout": 60
        }
     },

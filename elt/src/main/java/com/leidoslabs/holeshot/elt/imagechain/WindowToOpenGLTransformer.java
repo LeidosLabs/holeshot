@@ -16,11 +16,11 @@
 
 package com.leidoslabs.holeshot.elt.imagechain;
 
-import org.joml.Vector2d;
+import org.joml.Vector2dc;
 
 /**
  * Interface for Window -> OpenGL transformations
  */
 public interface WindowToOpenGLTransformer {
-  public Vector2d windowToOpenGL(Vector2d windowPoint);
+  public Vector2dc windowToOpenGL(Vector2dc windowPoint);
 }
