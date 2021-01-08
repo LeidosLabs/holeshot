@@ -1120,17 +1120,6 @@
 			<repositories>
 				<!--repository> <id>central</id> <name>central</name> <url>https://central.maven.org/maven2/</url> 
 					</repository -->
-
-				<repository>
-					<id>springsource-release</id>
-					<name>springsource-release</name>
-					<url>http://repository.springsource.com/maven/bundles/release</url>
-				</repository>
-				<repository>
-					<id>springsource-external</id>
-					<name>springsource-external</name>
-					<url>http://repository.springsource.com/maven/bundles/external</url>
-				</repository>
 				<repository>
 					<id>maven-eclipse-repo</id>
 					<name>maven-eclipse-repo</name>
@@ -1142,9 +1131,9 @@
 					<url>http://maven.geo-solutions.it</url>
 				</repository>
 				<repository>
-					<id>loci</id>
-					<name>loci</name>
-					<url>http://dev.loci.wisc.edu/maven2/releases/</url>
+					<id>scijava</id>
+					<name>scijava</name>
+					<url>https://maven.scijava.org/content/repositories/releases/</url>
 				</repository>
 				<repository>
 					<id>sonatype</id>
@@ -1162,20 +1151,20 @@
 					<url>https://repository.apache.org/content/repositories/snapshots/</url>
 				</repository>
 				<repository>
-					<id>boundless</id>
-					<name>boundless</name>
-					<url>http://repo.boundlessgeo.com/main/</url>
-				</repository>
-				<repository>
 					<id>osgeo</id>
 					<name>osgeo</name>
 					<url>http://download.osgeo.org/webdav/geotools/</url>
 				</repository>
-				<repository>
-					<id>bintray</id>
-					<name>bintray</name>
-					<url>https://jcenter.bintray.com</url>
-				</repository>
+                <repository>
+                <id>springsource-release</id>
+                    <name>springsource-release</name>
+                    <url>http://repository.springsource.com/maven/bundles/release</url>
+                </repository>
+                <repository>
+                    <id>springsource-external</id>
+                    <name>springsource-external</name>
+                    <url>http://repository.springsource.com/maven/bundles/external</url>
+                </repository>
 				<repository>
 					<id>maven-central</id>
 					<name>maven-central</name>
@@ -1189,16 +1178,6 @@
 			</repositories>
 			<pluginRepositories>
 				<pluginRepository>
-					<id>springsource-release</id>
-					<name>springsource-release</name>
-					<url>http://pluginRepository.springsource.com/maven/bundles/release</url>
-				</pluginRepository>
-				<pluginRepository>
-					<id>springsource-external</id>
-					<name>springsource-external</name>
-					<url>http://pluginRepository.springsource.com/maven/bundles/external</url>
-				</pluginRepository>
-				<pluginRepository>
 					<id>maven-eclipse-repo</id>
 					<name>maven-eclipse-repo</name>
 					<url>http://maven-eclipse.github.io/maven</url>
@@ -1209,8 +1188,8 @@
 					<url>http://maven.geo-solutions.it</url>
 				</pluginRepository>
 				<pluginRepository>
-					<id>loci</id>
-					<name>loci</name>
+					<id>scijava</id>
+					<name>scijava</name>
 					<url>http://dev.loci.wisc.edu/maven2/releases/</url>
 				</pluginRepository>
 				<pluginRepository>
@@ -1229,19 +1208,9 @@
 					<url>https://pluginRepository.apache.org/content/repositories/snapshots/</url>
 				</pluginRepository>
 				<pluginRepository>
-					<id>boundless</id>
-					<name>boundless</name>
-					<url>http://repo.boundlessgeo.com/main/</url>
-				</pluginRepository>
-				<pluginRepository>
 					<id>osgeo</id>
 					<name>osgeo</name>
 					<url>http://download.osgeo.org/webdav/geotools/</url>
-				</pluginRepository>
-				<pluginRepository>
-					<id>bintray</id>
-					<name>bintray</name>
-					<url>https://jcenter.bintray.com</url>
 				</pluginRepository>
 				<pluginRepository>
 					<id>maven-central</id>
@@ -1253,6 +1222,16 @@
 					<name>conexta-snapshots</name>
 					<url>http://artifacts.connexta.com/content/repositories/snapshots/</url>
 				</pluginRepository>
+                <pluginRepository>
+                    <id>springsource-release</id>
+                    <name>springsource-release</name>
+                    <url>http://pluginRepository.springsource.com/maven/bundles/release</url>
+                </pluginRepository>
+                <pluginRepository>
+                    <id>springsource-external</id>
+                    <name>springsource-external</name>
+                    <url>http://pluginRepository.springsource.com/maven/bundles/external</url>
+                </pluginRepository>
 			</pluginRepositories>
 			<distributionManagement>
 				<repository>
