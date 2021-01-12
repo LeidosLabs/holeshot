@@ -5,7 +5,7 @@ Image Tileserver with multi-tiered caching.
 
 - HOLESHOT* is optimized around the idea that users don’t look at all images and they’re frequently only utilizing a very small portion of the ones they do analyze (e.g. - an Airfield, a port, or a facility).
 - Instead of moving entire full-framed images, which average 2-50 GB in size) around the enterprise, HOLESHOT only moves the portions of the image that a user is likely to look at. This usually results in an order of magnitude decrease in data transferred.
-- Every night, HOLESHOT runs analytics to generate multi-resolution heatmaps that show the AOIs (Areas of Interest) for each user in the enterprise. The results of this analysis are used to move those AOIs in new images downstream and closer to the analyst through the multiple tiers of the HOLESHOT caching system.  (NOTE: Analytic-driven, usage-based caching isn't currently part of the opensource baseline, but is expected to be released in 2Q2020)
+- Every night, HOLESHOT runs analytics to generate multi-resolution heatmaps that show the AOIs (Areas of Interest) for each user in the enterprise. The results of this analysis are used to move those AOIs in new images downstream and closer to the analyst through the multiple tiers of the HOLESHOT caching system. 
 
 ## How is HOLESHOT different than other Tileservers?
 
