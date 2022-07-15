@@ -19,7 +19,7 @@
 		<aws-lambda-java-core.version>1.2.0</aws-lambda-java-core.version>
 		<aws-lambda-java-events.version>1.3.0</aws-lambda-java-events.version>
 		<aws-lambda-java-log4j.version>1.0.0</aws-lambda-java-log4j.version>
-		<awssdk.version>1.11.221</awssdk.version>
+		<awssdk.version>1.12.261</awssdk.version>
 		<codiceimagingnitf.version>0.9-SNAPSHOT</codiceimagingnitf.version>
 		<commons-cli.version>1.4</commons-cli.version>
 		<commons-collections.version>4.1</commons-collections.version>
