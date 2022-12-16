@@ -85,7 +85,7 @@
 		<project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
 		<replacer.version>1.5.3</replacer.version>
 		<scala.version>2.10.5</scala.version>
-		<scifio.version>0.37.0</scifio.version>
+		<scifio.version>0.43.3</scifio.version>
 		<sis.version>0.8</sis.version>
 		<slf4j.version>1.8.0-beta0</slf4j.version>
 		<slf4j-toys.version>1.6.0</slf4j-toys.version>
